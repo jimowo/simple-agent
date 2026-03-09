@@ -1,6 +1,5 @@
 """File operation tools."""
 
-from pathlib import Path
 from simple_agent.utils.safety import safe_path
 
 

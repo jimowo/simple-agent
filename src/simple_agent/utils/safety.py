@@ -1,6 +1,7 @@
 """Safety utilities for path operations."""
 
 from pathlib import Path
+
 from simple_agent.models.config import Settings
 
 

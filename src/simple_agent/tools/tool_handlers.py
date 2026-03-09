@@ -1,12 +1,13 @@
 """Tool handlers and tool definitions for the agent."""
 
-from typing import Any, Callable, Dict
-from anthropic import Anthropic
-from simple_agent.models.config import Settings
-from simple_agent.tools.base import ToolRegistry, ToolDefinition, ToolInputSchema
-from simple_agent.tools.bash_tools import run_bash
-from simple_agent.tools.file_tools import read_file, write_file, edit_file
+from typing import Callable, Dict
 
+from anthropic import Anthropic
+
+from simple_agent.models.config import Settings
+from simple_agent.tools.base import ToolRegistry
+from simple_agent.tools.bash_tools import run_bash
+from simple_agent.tools.file_tools import edit_file, read_file, write_file
 
 # Initialize global registry
 _tool_registry = ToolRegistry()
@@ -70,6 +71,7 @@ def handle_todo_write(items: list) -> str:
 
 def handle_task(prompt: str, agent_type: str = "Explore") -> str:
     from simple_agent.agent.base import run_subagent
+
     return run_subagent(_client, _settings.model_id, prompt, agent_type)
 
 
@@ -99,7 +101,9 @@ def handle_task_get(task_id: int) -> str:
     return _task_manager.get(task_id)
 
 
-def handle_task_update(task_id: int, status: str = None, add_blocked_by: list = None, add_blocks: list = None) -> str:
+def handle_task_update(
+    task_id: int, status: str = None, add_blocked_by: list = None, add_blocks: list = None
+) -> str:
     return _task_manager.update(task_id, status, add_blocked_by, add_blocks)
 
 
@@ -121,6 +125,7 @@ def handle_send_message(to: str, content: str, msg_type: str = "message") -> str
 
 def handle_read_inbox() -> str:
     import json
+
     return json.dumps(_message_bus.read_inbox("lead"), indent=2)
 
 
@@ -130,11 +135,13 @@ def handle_broadcast(content: str) -> str:
 
 def handle_shutdown_request(teammate: str) -> str:
     from simple_agent.agent.base import handle_shutdown_request
+
     return handle_shutdown_request(_message_bus, teammate)
 
 
 def handle_plan_approval(request_id: str, approve: bool, feedback: str = "") -> str:
     from simple_agent.agent.base import handle_plan_review
+
     return handle_plan_review(_message_bus, request_id, approve, feedback)
 
 
@@ -179,7 +186,11 @@ TOOLS = [
     {
         "name": "bash",
         "description": "Run a shell command.",
-        "input_schema": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]},
+        "input_schema": {
+            "type": "object",
+            "properties": {"command": {"type": "string"}},
+            "required": ["command"],
+        },
     },
     {
         "name": "read_file",
@@ -204,7 +215,11 @@ TOOLS = [
         "description": "Replace exact text in file.",
         "input_schema": {
             "type": "object",
-            "properties": {"path": {"type": "string"}, "old_text": {"type": "string"}, "new_text": {"type": "string"}},
+            "properties": {
+                "path": {"type": "string"},
+                "old_text": {"type": "string"},
+                "new_text": {"type": "string"},
+            },
             "required": ["path", "old_text", "new_text"],
         },
     },
@@ -220,7 +235,10 @@ TOOLS = [
                         "type": "object",
                         "properties": {
                             "content": {"type": "string"},
-                            "status": {"type": "string", "enum": ["pending", "in_progress", "completed"]},
+                            "status": {
+                                "type": "string",
+                                "enum": ["pending", "in_progress", "completed"],
+                            },
                             "activeForm": {"type": "string"},
                         },
                         "required": ["content", "status", "activeForm"],
@@ -235,16 +253,27 @@ TOOLS = [
         "description": "Spawn a subagent for isolated exploration or work.",
         "input_schema": {
             "type": "object",
-            "properties": {"prompt": {"type": "string"}, "agent_type": {"type": "string", "enum": ["Explore", "general-purpose"]}},
+            "properties": {
+                "prompt": {"type": "string"},
+                "agent_type": {"type": "string", "enum": ["Explore", "general-purpose"]},
+            },
             "required": ["prompt"],
         },
     },
     {
         "name": "load_skill",
         "description": "Load specialized knowledge by name.",
-        "input_schema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]},
+        "input_schema": {
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"],
+        },
     },
-    {"name": "compress", "description": "Manually compress conversation context.", "input_schema": {"type": "object", "properties": {}}},
+    {
+        "name": "compress",
+        "description": "Manually compress conversation context.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
     {
         "name": "background_run",
         "description": "Run command in background thread.",
@@ -271,7 +300,11 @@ TOOLS = [
     {
         "name": "task_get",
         "description": "Get task details by ID.",
-        "input_schema": {"type": "object", "properties": {"task_id": {"type": "integer"}}, "required": ["task_id"]},
+        "input_schema": {
+            "type": "object",
+            "properties": {"task_id": {"type": "integer"}},
+            "required": ["task_id"],
+        },
     },
     {
         "name": "task_update",
@@ -280,57 +313,100 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "task_id": {"type": "integer"},
-                "status": {"type": "string", "enum": ["pending", "in_progress", "completed", "deleted"]},
+                "status": {
+                    "type": "string",
+                    "enum": ["pending", "in_progress", "completed", "deleted"],
+                },
                 "add_blocked_by": {"type": "array", "items": {"type": "integer"}},
                 "add_blocks": {"type": "array", "items": {"type": "integer"}},
             },
             "required": ["task_id"],
         },
     },
-    {"name": "task_list", "description": "List all tasks.", "input_schema": {"type": "object", "properties": {}}},
+    {
+        "name": "task_list",
+        "description": "List all tasks.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
     {
         "name": "spawn_teammate",
         "description": "Spawn a persistent autonomous teammate.",
         "input_schema": {
             "type": "object",
-            "properties": {"name": {"type": "string"}, "role": {"type": "string"}, "prompt": {"type": "string"}},
+            "properties": {
+                "name": {"type": "string"},
+                "role": {"type": "string"},
+                "prompt": {"type": "string"},
+            },
             "required": ["name", "role", "prompt"],
         },
     },
-    {"name": "list_teammates", "description": "List all teammates.", "input_schema": {"type": "object", "properties": {}}},
+    {
+        "name": "list_teammates",
+        "description": "List all teammates.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
     {
         "name": "send_message",
         "description": "Send a message to a teammate.",
         "input_schema": {
             "type": "object",
-            "properties": {"to": {"type": "string"}, "content": {"type": "string"}, "msg_type": {"type": "string"}},
+            "properties": {
+                "to": {"type": "string"},
+                "content": {"type": "string"},
+                "msg_type": {"type": "string"},
+            },
             "required": ["to", "content"],
         },
     },
-    {"name": "read_inbox", "description": "Read and drain the lead's inbox.", "input_schema": {"type": "object", "properties": {}}},
+    {
+        "name": "read_inbox",
+        "description": "Read and drain the lead's inbox.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
     {
         "name": "broadcast",
         "description": "Send message to all teammates.",
-        "input_schema": {"type": "object", "properties": {"content": {"type": "string"}}, "required": ["content"]},
+        "input_schema": {
+            "type": "object",
+            "properties": {"content": {"type": "string"}},
+            "required": ["content"],
+        },
     },
     {
         "name": "shutdown_request",
         "description": "Request a teammate to shut down.",
-        "input_schema": {"type": "object", "properties": {"teammate": {"type": "string"}}, "required": ["teammate"]},
+        "input_schema": {
+            "type": "object",
+            "properties": {"teammate": {"type": "string"}},
+            "required": ["teammate"],
+        },
     },
     {
         "name": "plan_approval",
         "description": "Approve or reject a teammate's plan.",
         "input_schema": {
             "type": "object",
-            "properties": {"request_id": {"type": "string"}, "approve": {"type": "boolean"}, "feedback": {"type": "string"}},
+            "properties": {
+                "request_id": {"type": "string"},
+                "approve": {"type": "boolean"},
+                "feedback": {"type": "string"},
+            },
             "required": ["request_id", "approve"],
         },
     },
-    {"name": "idle", "description": "Enter idle state.", "input_schema": {"type": "object", "properties": {}}},
+    {
+        "name": "idle",
+        "description": "Enter idle state.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
     {
         "name": "claim_task",
         "description": "Claim a task from the board.",
-        "input_schema": {"type": "object", "properties": {"task_id": {"type": "integer"}}, "required": ["task_id"]},
+        "input_schema": {
+            "type": "object",
+            "properties": {"task_id": {"type": "integer"}},
+            "required": ["task_id"],
+        },
     },
 ]

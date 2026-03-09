@@ -1,6 +1,7 @@
 """Task and Todo models."""
 
 from typing import List, Optional
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -9,7 +10,9 @@ class TodoItem(BaseModel):
 
     content: str = Field(..., min_length=1, description="Task description")
     status: str = Field(default="pending", description="Task status")
-    active_form: str = Field(..., min_length=1, alias="activeForm", description="Active form description")
+    active_form: str = Field(
+        ..., min_length=1, alias="activeForm", description="Active form description"
+    )
 
     @field_validator("status")
     @classmethod

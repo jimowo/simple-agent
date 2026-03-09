@@ -2,10 +2,12 @@
 
 import json
 import uuid
+
 from anthropic import Anthropic
+
 from simple_agent.models.config import Settings
 from simple_agent.tools.bash_tools import run_bash
-from simple_agent.tools.file_tools import read_file, write_file, edit_file
+from simple_agent.tools.file_tools import edit_file, read_file, write_file
 from simple_agent.utils.compression import auto_compact
 
 
@@ -26,12 +28,20 @@ def run_subagent(client: Anthropic, model: str, prompt: str, agent_type: str = "
         {
             "name": "bash",
             "description": "Run command.",
-            "input_schema": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]},
+            "input_schema": {
+                "type": "object",
+                "properties": {"command": {"type": "string"}},
+                "required": ["command"],
+            },
         },
         {
             "name": "read_file",
             "description": "Read file.",
-            "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
+            "input_schema": {
+                "type": "object",
+                "properties": {"path": {"type": "string"}},
+                "required": ["path"],
+            },
         },
     ]
     if agent_type != "Explore":
@@ -50,7 +60,11 @@ def run_subagent(client: Anthropic, model: str, prompt: str, agent_type: str = "
                 "description": "Edit file.",
                 "input_schema": {
                     "type": "object",
-                    "properties": {"path": {"type": "string"}, "old_text": {"type": "string"}, "new_text": {"type": "string"}},
+                    "properties": {
+                        "path": {"type": "string"},
+                        "old_text": {"type": "string"},
+                        "new_text": {"type": "string"},
+                    },
                     "required": ["path", "old_text", "new_text"],
                 },
             },
@@ -66,7 +80,9 @@ def run_subagent(client: Anthropic, model: str, prompt: str, agent_type: str = "
     sub_msgs = [{"role": "user", "content": prompt}]
     resp = None
     for _ in range(30):
-        resp = client.messages.create(model=model, messages=sub_msgs, tools=sub_tools, max_tokens=8000)
+        resp = client.messages.create(
+            model=model, messages=sub_msgs, tools=sub_tools, max_tokens=8000
+        )
         sub_msgs.append({"role": "assistant", "content": resp.content})
         if resp.stop_reason != "tool_use":
             break
@@ -74,7 +90,13 @@ def run_subagent(client: Anthropic, model: str, prompt: str, agent_type: str = "
         for b in resp.content:
             if b.type == "tool_use":
                 h = sub_handlers.get(b.name, lambda **kw: "Unknown tool")
-                results.append({"type": "tool_result", "tool_use_id": b.id, "content": str(h(**b.input))[:50000]})
+                results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": b.id,
+                        "content": str(h(**b.input))[:50000],
+                    }
+                )
         sub_msgs.append({"role": "user", "content": results})
 
     if resp:
@@ -100,11 +122,17 @@ def handle_plan_review(bus, request_id: str, approve: bool, feedback: str = "") 
     if not req:
         return f"Error: Unknown plan request_id '{request_id}'"
     req["status"] = "approved" if approve else "rejected"
-    bus.send("lead", req["from"], feedback, "plan_approval_response", {
-        "request_id": request_id,
-        "approve": approve,
-        "feedback": feedback,
-    })
+    bus.send(
+        "lead",
+        req["from"],
+        feedback,
+        "plan_approval_response",
+        {
+            "request_id": request_id,
+            "approve": approve,
+            "feedback": feedback,
+        },
+    )
     return f"Plan {req['status']} for '{req['from']}'"
 
 
@@ -122,15 +150,19 @@ class Agent:
         skill_loader=None,
     ):
         self.settings = settings or Settings()
-        self.client = Anthropic(base_url=self.settings.anthropic_base_url) if self.settings.anthropic_base_url else Anthropic()
+        self.client = (
+            Anthropic(base_url=self.settings.anthropic_base_url)
+            if self.settings.anthropic_base_url
+            else Anthropic()
+        )
 
         # Managers
-        from simple_agent.managers.todo import TodoManager
-        from simple_agent.managers.task import TaskManager
         from simple_agent.managers.background import BackgroundManager
         from simple_agent.managers.message import MessageBus
         from simple_agent.managers.skill import SkillLoader
+        from simple_agent.managers.task import TaskManager
         from simple_agent.managers.teammate import TeammateManager
+        from simple_agent.managers.todo import TodoManager
 
         self.todo = todo_manager or TodoManager()
         self.task_mgr = task_manager or TaskManager(self.settings)
@@ -141,6 +173,7 @@ class Agent:
 
         # Initialize tool handlers
         from simple_agent.tools.tool_handlers import initialize_handlers
+
         initialize_handlers(
             self.todo,
             self.task_mgr,
@@ -184,14 +217,16 @@ Skills available:
             if msg.get("role") == "assistant":
                 content = msg.get("content", [])
                 if isinstance(content, list):
-                    return "\n".join(getattr(c, "text", str(c)) for c in content if hasattr(c, "text") or c)
+                    return "\n".join(
+                        getattr(c, "text", str(c)) for c in content if hasattr(c, "text") or c
+                    )
                 return str(content)
         return "(no response)"
 
     def _agent_loop(self, messages: list):
         """Run agent loop until completion."""
-        from simple_agent.utils.compression import estimate_tokens, microcompact
         from simple_agent.tools.tool_handlers import TOOL_HANDLERS, TOOLS
+        from simple_agent.utils.compression import estimate_tokens, microcompact
 
         rounds_without_todo = 0
         while True:
@@ -199,19 +234,28 @@ Skills available:
             microcompact(messages)
             if estimate_tokens(messages) > self.settings.token_threshold:
                 print("[auto-compact triggered]")
-                messages[:] = auto_compact(messages, self.client, self.settings.model_id, self.settings.transcript_dir)
+                messages[:] = auto_compact(
+                    messages, self.client, self.settings.model_id, self.settings.transcript_dir
+                )
 
             # Drain background notifications
             notifs = self.bg.drain()
             if notifs:
                 txt = "\n".join(f"[bg:{n['task_id']}] {n['status']}: {n['result']}" for n in notifs)
-                messages.append({"role": "user", "content": f"<background-results>\n{txt}\n</background-results>"})
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": f"<background-results>\n{txt}\n</background-results>",
+                    }
+                )
                 messages.append({"role": "assistant", "content": "Noted background results."})
 
             # Check lead inbox
             inbox = self.bus.read_inbox("lead")
             if inbox:
-                messages.append({"role": "user", "content": f"<inbox>{json.dumps(inbox, indent=2)}</inbox>"})
+                messages.append(
+                    {"role": "user", "content": f"<inbox>{json.dumps(inbox, indent=2)}</inbox>"}
+                )
                 messages.append({"role": "assistant", "content": "Noted inbox messages."})
 
             # LLM call
@@ -236,22 +280,30 @@ Skills available:
                         manual_compress = True
                     handler = TOOL_HANDLERS.get(block.name)
                     try:
-                        output = handler(**block.input) if handler else f"Unknown tool: {block.name}"
+                        output = (
+                            handler(**block.input) if handler else f"Unknown tool: {block.name}"
+                        )
                     except Exception as e:
                         output = f"Error: {e}"
                     print(f"> {block.name}: {str(output)[:200]}")
-                    results.append({"type": "tool_result", "tool_use_id": block.id, "content": str(output)})
+                    results.append(
+                        {"type": "tool_result", "tool_use_id": block.id, "content": str(output)}
+                    )
                     if block.name == "TodoWrite":
                         used_todo = True
 
             # Nag reminder
             rounds_without_todo = 0 if used_todo else rounds_without_todo + 1
             if rounds_without_todo >= 3:
-                results.insert(0, {"type": "text", "text": "<reminder>Update your todos.</reminder>"})
+                results.insert(
+                    0, {"type": "text", "text": "<reminder>Update your todos.</reminder>"}
+                )
 
             messages.append({"role": "user", "content": results})
 
             # Manual compress
             if manual_compress:
                 print("[manual compact]")
-                messages[:] = auto_compact(messages, self.client, self.settings.model_id, self.settings.transcript_dir)
+                messages[:] = auto_compact(
+                    messages, self.client, self.settings.model_id, self.settings.transcript_dir
+                )

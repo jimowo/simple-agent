@@ -1,7 +1,7 @@
 """File-based task manager."""
 
 import json
-from pathlib import Path
+
 from simple_agent.models.config import Settings
 
 
@@ -47,7 +47,9 @@ class TaskManager:
         """Get task by ID."""
         return json.dumps(self._load(tid), indent=2)
 
-    def update(self, tid: int, status: str = None, add_blocked_by: list = None, add_blocks: list = None) -> str:
+    def update(
+        self, tid: int, status: str = None, add_blocked_by: list = None, add_blocks: list = None
+    ) -> str:
         """Update task."""
         task = self._load(tid)
         if status:

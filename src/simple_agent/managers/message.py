@@ -2,7 +2,7 @@
 
 import json
 import time
-from pathlib import Path
+
 from simple_agent.models.config import Settings
 
 
@@ -22,7 +22,9 @@ class MessageBus:
         self.inbox_dir = self.settings.inbox_dir
         self.inbox_dir.mkdir(parents=True, exist_ok=True)
 
-    def send(self, sender: str, to: str, content: str, msg_type: str = "message", extra: dict = None) -> str:
+    def send(
+        self, sender: str, to: str, content: str, msg_type: str = "message", extra: dict = None
+    ) -> str:
         """Send a message to a specific agent."""
         msg = {
             "type": msg_type,
@@ -41,7 +43,7 @@ class MessageBus:
         path = self.inbox_dir / f"{name}.jsonl"
         if not path.exists():
             return []
-        msgs = [json.loads(l) for l in path.read_text().strip().splitlines() if l]
+        msgs = [json.loads(line) for line in path.read_text().strip().splitlines() if line]
         path.write_text("")
         return msgs
 

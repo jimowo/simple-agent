@@ -15,3 +15,6 @@ wheels/
 
 # Claude Code
 .claude
+
+# Ruff
+.ruff_cache

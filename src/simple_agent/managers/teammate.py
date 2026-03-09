@@ -3,15 +3,14 @@
 import json
 import threading
 import time
-from pathlib import Path
-from queue import Queue
+
 from anthropic import Anthropic
-from simple_agent.models.config import Settings
+
 from simple_agent.managers.message import MessageBus
 from simple_agent.managers.task import TaskManager
+from simple_agent.models.config import Settings
 from simple_agent.tools.bash_tools import run_bash
-from simple_agent.tools.file_tools import read_file, write_file, edit_file
-
+from simple_agent.tools.file_tools import edit_file, read_file, write_file
 
 # Global shutdown and plan tracking
 shutdown_requests = {}
@@ -60,7 +59,11 @@ class TeammateManager:
             member = {"name": name, "role": role, "status": "working"}
             self.config["members"].append(member)
         self._save()
-        client = Anthropic(base_url=self.settings.anthropic_base_url) if self.settings.anthropic_base_url else Anthropic()
+        client = (
+            Anthropic(base_url=self.settings.anthropic_base_url)
+            if self.settings.anthropic_base_url
+            else Anthropic()
+        )
         threading.Thread(
             target=self._loop,
             args=(name, role, prompt, client),
@@ -87,12 +90,20 @@ class TeammateManager:
             {
                 "name": "bash",
                 "description": "Run command.",
-                "input_schema": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]},
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"command": {"type": "string"}},
+                    "required": ["command"],
+                },
             },
             {
                 "name": "read_file",
                 "description": "Read file.",
-                "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"path": {"type": "string"}},
+                    "required": ["path"],
+                },
             },
             {
                 "name": "write_file",
@@ -108,7 +119,11 @@ class TeammateManager:
                 "description": "Edit file.",
                 "input_schema": {
                     "type": "object",
-                    "properties": {"path": {"type": "string"}, "old_text": {"type": "string"}, "new_text": {"type": "string"}},
+                    "properties": {
+                        "path": {"type": "string"},
+                        "old_text": {"type": "string"},
+                        "new_text": {"type": "string"},
+                    },
                     "required": ["path", "old_text", "new_text"],
                 },
             },
@@ -121,11 +136,19 @@ class TeammateManager:
                     "required": ["to", "content"],
                 },
             },
-            {"name": "idle", "description": "Signal no more work.", "input_schema": {"type": "object", "properties": {}}},
+            {
+                "name": "idle",
+                "description": "Signal no more work.",
+                "input_schema": {"type": "object", "properties": {}},
+            },
             {
                 "name": "claim_task",
                 "description": "Claim task by ID.",
-                "input_schema": {"type": "object", "properties": {"task_id": {"type": "integer"}}, "required": ["task_id"]},
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"task_id": {"type": "integer"}},
+                    "required": ["task_id"],
+                },
             },
         ]
 
@@ -168,11 +191,15 @@ class TeammateManager:
                                 "bash": lambda **kw: run_bash(kw["command"]),
                                 "read_file": lambda **kw: read_file(kw["path"]),
                                 "write_file": lambda **kw: write_file(kw["path"], kw["content"]),
-                                "edit_file": lambda **kw: edit_file(kw["path"], kw["old_text"], kw["new_text"]),
+                                "edit_file": lambda **kw: edit_file(
+                                    kw["path"], kw["old_text"], kw["new_text"]
+                                ),
                             }
                             output = dispatch.get(block.name, lambda **kw: "Unknown")(**block.input)
                         print(f"  [{name}] {block.name}: {str(output)[:120]}")
-                        results.append({"type": "tool_result", "tool_use_id": block.id, "content": str(output)})
+                        results.append(
+                            {"type": "tool_result", "tool_use_id": block.id, "content": str(output)}
+                        )
                 messages.append({"role": "user", "content": results})
                 if idle_requested:
                     break
@@ -194,22 +221,38 @@ class TeammateManager:
                 unclaimed = []
                 for f in sorted(self.settings.tasks_dir.glob("task_*.json")):
                     t = json.loads(f.read_text())
-                    if t.get("status") == "pending" and not t.get("owner") and not t.get("blockedBy"):
+                    if (
+                        t.get("status") == "pending"
+                        and not t.get("owner")
+                        and not t.get("blockedBy")
+                    ):
                         unclaimed.append(t)
                 if unclaimed:
                     task = unclaimed[0]
                     self.task_mgr.claim(task["id"], name)
                     if len(messages) <= 3:
-                        messages.insert(0, {
+                        messages.insert(
+                            0,
+                            {
+                                "role": "user",
+                                "content": f"<identity>You are '{name}', role: {role}, team: {team_name}.</identity>",
+                            },
+                        )
+                        messages.insert(
+                            1, {"role": "assistant", "content": f"I am {name}. Continuing."}
+                        )
+                    messages.append(
+                        {
                             "role": "user",
-                            "content": f"<identity>You are '{name}', role: {role}, team: {team_name}.</identity>",
-                        })
-                        messages.insert(1, {"role": "assistant", "content": f"I am {name}. Continuing."})
-                    messages.append({
-                        "role": "user",
-                        "content": f"<auto-claimed>Task #{task['id']}: {task['subject']}\n{task.get('description', '')}</auto-claimed>",
-                    })
-                    messages.append({"role": "assistant", "content": f"Claimed task #{task['id']}. Working on it."})
+                            "content": f"<auto-claimed>Task #{task['id']}: {task['subject']}\n{task.get('description', '')}</auto-claimed>",
+                        }
+                    )
+                    messages.append(
+                        {
+                            "role": "assistant",
+                            "content": f"Claimed task #{task['id']}. Working on it.",
+                        }
+                    )
                     resume = True
                     break
             if not resume:

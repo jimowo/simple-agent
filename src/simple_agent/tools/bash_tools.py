@@ -2,7 +2,8 @@
 
 import subprocess
 from pathlib import Path
-from simple_agent.utils.safety import safe_path, is_dangerous_command
+
+from simple_agent.utils.safety import is_dangerous_command
 
 
 def run_bash(command: str, workdir: Path = None, timeout: int = 120) -> str:

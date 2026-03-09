@@ -1,6 +1,5 @@
 """CLI interface for simple-agent."""
 
-import sys
 from pathlib import Path
 from typing import Optional
 
@@ -9,8 +8,8 @@ from rich.console import Console
 from rich.markdown import Markdown
 
 from simple_agent.agent.base import Agent
-from simple_agent.models.config import Settings, create_settings
 from simple_agent.agent.loop import agent_loop
+from simple_agent.models.config import Settings, create_settings
 
 app = typer.Typer(
     name="simple-agent",
@@ -29,7 +28,9 @@ def _get_agent(settings: Settings = None) -> Agent:
 def main(
     ctx: typer.Context,
     model: Optional[str] = typer.Option(None, "--model", "-m", help="Override model ID"),
-    workdir: Optional[str] = typer.Option(None, "--workdir", "-w", help="Override working directory"),
+    workdir: Optional[str] = typer.Option(
+        None, "--workdir", "-w", help="Override working directory"
+    ),
 ):
     """Global options for simple-agent."""
     settings_dict = {}
@@ -145,6 +146,7 @@ def task_create_command(
     settings = ctx.obj or Settings()
     agent = _get_agent(settings)
     import json
+
     result = json.loads(agent.task_mgr.create(subject, description))
     console.print(f"[green]Created task #{result['id']}:[/green] {result['subject']}")
 
@@ -158,6 +160,7 @@ def task_get_command(
     settings = ctx.obj or Settings()
     agent = _get_agent(settings)
     import json
+
     result = json.loads(agent.task_mgr.get(task_id))
     console.print(json.dumps(result, indent=2))
 
@@ -177,6 +180,7 @@ def inbox_command(ctx: typer.Context):
     settings = ctx.obj or Settings()
     agent = _get_agent(settings)
     import json
+
     msgs = agent.bus.read_inbox("lead")
     if msgs:
         console.print(json.dumps(msgs, indent=2))
@@ -199,6 +203,7 @@ def compact_command(
 def version_command():
     """Show version information."""
     from simple_agent import __version__
+
     console.print(f"simple-agent version [cyan]{__version__}[/cyan]")
 
 

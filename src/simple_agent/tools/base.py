@@ -1,6 +1,7 @@
 """Base tool definitions and registry."""
 
 from typing import Any, Callable, Dict, List, Optional
+
 from pydantic import BaseModel, Field
 
 

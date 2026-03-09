@@ -1,6 +1,7 @@
 """Todo manager for tracking multi-step work."""
 
 from typing import List
+
 from simple_agent.models.tasks import TodoItem
 
 
@@ -26,11 +27,13 @@ class TodoManager:
             todo_item = TodoItem(**item)
             if todo_item.status == "in_progress":
                 ip += 1
-            validated.append({
-                "content": todo_item.content,
-                "status": todo_item.status,
-                "activeForm": todo_item.active_form,
-            })
+            validated.append(
+                {
+                    "content": todo_item.content,
+                    "status": todo_item.status,
+                    "activeForm": todo_item.active_form,
+                }
+            )
 
         if len(validated) > 20:
             raise ValueError("Max 20 todos")
@@ -52,7 +55,9 @@ class TodoManager:
 
         lines = []
         for item in self.items:
-            m = {"completed": "[x]", "in_progress": "[>]", "pending": "[ ]"}.get(item["status"], "[?]")
+            m = {"completed": "[x]", "in_progress": "[>]", "pending": "[ ]"}.get(
+                item["status"], "[?]"
+            )
             suffix = f" <- {item['activeForm']}" if item["status"] == "in_progress" else ""
             lines.append(f"{m} {item['content']}{suffix}")
 

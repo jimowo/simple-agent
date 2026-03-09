@@ -2,10 +2,9 @@
 
 import subprocess
 import threading
-import time
 import uuid
-from pathlib import Path
 from queue import Queue
+
 from simple_agent.models.config import Settings
 
 
@@ -40,18 +39,23 @@ class BackgroundManager:
         except Exception as e:
             self.tasks[tid].update({"status": "error", "result": str(e)})
 
-        self.notifications.put({
-            "task_id": tid,
-            "status": self.tasks[tid]["status"],
-            "result": self.tasks[tid]["result"][:500],
-        })
+        self.notifications.put(
+            {
+                "task_id": tid,
+                "status": self.tasks[tid]["status"],
+                "result": self.tasks[tid]["result"][:500],
+            }
+        )
 
     def check(self, tid: str = None) -> str:
         """Check background task status."""
         if tid:
             t = self.tasks.get(tid)
             return f"[{t['status']}] {t.get('result', '(running)')}" if t else f"Unknown: {tid}"
-        return "\n".join(f"{k}: [{v['status']}] {v['command'][:60]}" for k, v in self.tasks.items()) or "No bg tasks."
+        return (
+            "\n".join(f"{k}: [{v['status']}] {v['command'][:60]}" for k, v in self.tasks.items())
+            or "No bg tasks."
+        )
 
     def drain(self) -> list:
         """Drain notification queue."""

@@ -2,6 +2,7 @@
 
 import re
 from pathlib import Path
+
 from simple_agent.models.config import Settings
 
 
@@ -33,11 +34,13 @@ class SkillLoader:
         """Get descriptions of all skills."""
         if not self.skills:
             return "(no skills)"
-        return "\n".join(f"  - {n}: {s['meta'].get('description', '-')}" for n, s in self.skills.items())
+        return "\n".join(
+            f"  - {n}: {s['meta'].get('description', '-')}" for n, s in self.skills.items()
+        )
 
     def load(self, name: str) -> str:
         """Load a skill by name."""
         s = self.skills.get(name)
         if not s:
             return f"Error: Unknown skill '{name}'. Available: {', '.join(self.skills.keys())}"
-        return f"<skill name=\"{name}\">\n{s['body']}\n</skill>"
+        return f'<skill name="{name}">\n{s["body"]}\n</skill>'
