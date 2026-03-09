@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "python-backend": {
+      "source": "jiatastic/open-python-skills",
+      "sourceType": "github",
+      "computedHash": "79043c6c790d2a68ea6da31db8be02a77e0f2946c64e5e20f4d540f76d80e0dc"
+    }
+  }
+}
