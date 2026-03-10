@@ -1,124 +1,56 @@
-"""Core Agent functionality."""
+"""Core Agent functionality.
 
-import json
+This module implements the Agent class following SOLID principles:
+- Single Responsibility Principle (SRP): Agent focuses solely on query processing
+- Dependency Inversion Principle (DIP): Uses AgentContext for injected dependencies
+"""
+
 import uuid
+from typing import Optional
 
+from simple_agent.agent.context import AgentContext
+from simple_agent.agent.loop import AgentLoop
 from simple_agent.models.config import Settings
-from simple_agent.providers import ProviderFactory
-from simple_agent.tools.bash_tools import run_bash
-from simple_agent.tools.file_tools import edit_file, read_file, write_file
-from simple_agent.utils.compression import auto_compact
-
-
-def run_subagent(
-    provider, prompt: str, agent_type: str = "Explore"
-) -> str:
-    """
-    Run a subagent for isolated exploration or work.
-
-    Args:
-        provider: AI provider instance
-        prompt: Prompt for subagent
-        agent_type: Type of agent (Explore or general-purpose)
-
-    Returns:
-        Summary of subagent work
-    """
-    sub_tools = [
-        {
-            "name": "bash",
-            "description": "Run command.",
-            "input_schema": {
-                "type": "object",
-                "properties": {"command": {"type": "string"}},
-                "required": ["command"],
-            },
-        },
-        {
-            "name": "read_file",
-            "description": "Read file.",
-            "input_schema": {
-                "type": "object",
-                "properties": {"path": {"type": "string"}},
-                "required": ["path"],
-            },
-        },
-    ]
-    if agent_type != "Explore":
-        sub_tools += [
-            {
-                "name": "write_file",
-                "description": "Write file.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {"path": {"type": "string"}, "content": {"type": "string"}},
-                    "required": ["path", "content"],
-                },
-            },
-            {
-                "name": "edit_file",
-                "description": "Edit file.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "path": {"type": "string"},
-                        "old_text": {"type": "string"},
-                        "new_text": {"type": "string"},
-                    },
-                    "required": ["path", "old_text", "new_text"],
-                },
-            },
-        ]
-
-    sub_handlers = {
-        "bash": lambda **kw: run_bash(kw["command"]),
-        "read_file": lambda **kw: read_file(kw["path"]),
-        "write_file": lambda **kw: write_file(kw["path"], kw["content"]),
-        "edit_file": lambda **kw: edit_file(kw["path"], kw["old_text"], kw["new_text"]),
-    }
-
-    sub_msgs = [{"role": "user", "content": prompt}]
-    resp = None
-    for _ in range(30):
-        resp = provider.create_message(
-            messages=sub_msgs, tools=sub_tools, max_tokens=8000
-        )
-        sub_msgs.append({"role": "assistant", "content": resp.content})
-        if resp.stop_reason != "tool_use":
-            break
-        results = []
-        for tc in resp.tool_calls:
-            h = sub_handlers.get(tc.name, lambda **kw: "Unknown tool")
-            results.append(
-                {
-                    "type": "tool_result",
-                    "tool_use_id": tc.id,
-                    "content": str(h(**tc.input))[:50000],
-                }
-            )
-        sub_msgs.append({"role": "user", "content": results})
-
-    if resp:
-        text_parts = []
-        for c in resp.content:
-            if isinstance(c, dict) and c.get("type") == "text":
-                text_parts.append(c.get("text", ""))
-        return "".join(text_parts) or "(no summary)"
-    return "(subagent failed)"
 
 
 def handle_shutdown_request(bus, teammate: str) -> str:
-    """Handle shutdown request for a teammate."""
+    """Handle shutdown request for a teammate.
+
+    Args:
+        bus: Message bus instance
+        teammate: Name of teammate to shutdown
+
+    Returns:
+        Confirmation message
+    """
     from simple_agent.managers.teammate import shutdown_requests
 
     req_id = str(uuid.uuid4())[:8]
     shutdown_requests[req_id] = {"target": teammate, "status": "pending"}
-    bus.send("lead", teammate, "Please shut down.", "shutdown_request", {"request_id": req_id})
+    bus.send(
+        "lead",
+        teammate,
+        "Please shut down.",
+        "shutdown_request",
+        {"request_id": req_id},
+    )
     return f"Shutdown request {req_id} sent to '{teammate}'"
 
 
-def handle_plan_review(bus, request_id: str, approve: bool, feedback: str = "") -> str:
-    """Handle plan approval response."""
+def handle_plan_review(
+    bus, request_id: str, approve: bool, feedback: str = ""
+) -> str:
+    """Handle plan approval response.
+
+    Args:
+        bus: Message bus instance
+        request_id: Plan request ID
+        approve: Whether to approve the plan
+        feedback: Optional feedback message
+
+    Returns:
+        Confirmation message
+    """
     from simple_agent.managers.teammate import plan_requests
 
     req = plan_requests.get(request_id)
@@ -140,11 +72,21 @@ def handle_plan_review(bus, request_id: str, approve: bool, feedback: str = "") 
 
 
 class Agent:
-    """Main Agent class."""
+    """Main Agent class.
+
+    This class follows the Single Responsibility Principle (SRP) by
+    focusing solely on processing user queries and coordinating
+    with other components through dependency injection.
+
+    The Agent uses AgentContext to access all its dependencies,
+    following the Dependency Inversion Principle (DIP).
+    """
 
     def __init__(
         self,
-        settings: Settings = None,
+        settings: Optional[Settings] = None,
+        context: Optional[AgentContext] = None,
+        # Legacy parameters for backward compatibility
         todo_manager=None,
         task_manager=None,
         background_manager=None,
@@ -152,98 +94,232 @@ class Agent:
         teammate_manager=None,
         skill_loader=None,
     ):
-        self.settings = settings or Settings()
+        """Initialize the Agent.
 
-        # Initialize provider
-        self.provider = self._create_provider()
+        Args:
+            settings: Application settings (optional, uses default if None)
+            context: Pre-built AgentContext (optional, creates from settings if None)
+            todo_manager: Legacy parameter for backward compatibility
+            task_manager: Legacy parameter for backward compatibility
+            background_manager: Legacy parameter for backward compatibility
+            message_bus: Legacy parameter for backward compatibility
+            teammate_manager: Legacy parameter for backward compatibility
+            skill_loader: Legacy parameter for backward compatibility
+        """
+        # Use provided context or create from settings
+        if context is not None:
+            self._ctx = context
+        else:
+            # Check for legacy-style initialization
+            if any(
+                x is not None
+                for x in [
+                    todo_manager,
+                    task_manager,
+                    background_manager,
+                    message_bus,
+                    teammate_manager,
+                    skill_loader,
+                ]
+            ):
+                # Legacy mode: create context from provided managers
+                self._ctx = self._create_legacy_context(
+                    settings or Settings(),
+                    todo_manager,
+                    task_manager,
+                    background_manager,
+                    message_bus,
+                    teammate_manager,
+                    skill_loader,
+                )
+            else:
+                # Modern mode: create context from settings using container
+                self._ctx = AgentContext.from_container(settings or Settings())
 
-        # Managers
-        from simple_agent.managers.background import BackgroundManager
-        from simple_agent.managers.message import MessageBus
-        from simple_agent.managers.skill import SkillLoader
-        from simple_agent.managers.task import TaskManager
-        from simple_agent.managers.teammate import TeammateManager
-        from simple_agent.managers.todo import TodoManager
+        # Initialize tool handlers with managers from context
+        self._initialize_tool_handlers()
 
-        self.todo = todo_manager or TodoManager()
-        self.task_mgr = task_manager or TaskManager(self.settings)
-        self.bg = background_manager or BackgroundManager(self.settings)
-        self.bus = message_bus or MessageBus(self.settings)
-        self.skill_loader = skill_loader or SkillLoader(settings=self.settings)
-        self.teammate = teammate_manager or TeammateManager(self.bus, self.task_mgr, self.settings)
+    def _create_legacy_context(
+        self,
+        settings: Settings,
+        todo_manager,
+        task_manager,
+        background_manager,
+        message_bus,
+        teammate_manager,
+        skill_loader,
+    ) -> AgentContext:
+        """Create AgentContext from legacy manager arguments.
 
-        # Initialize tool handlers
+        This maintains backward compatibility with code that directly
+        provides manager instances.
+
+        Args:
+            settings: Application settings
+            todo_manager: Todo manager instance
+            task_manager: Task manager instance
+            background_manager: Background manager instance
+            message_bus: Message bus instance
+            teammate_manager: Teammate manager instance
+            skill_loader: Skill loader instance
+
+        Returns:
+            AgentContext with provided managers
+        """
+        from simple_agent.core.service_registration import _create_provider
+        from simple_agent.managers.background import (
+            BackgroundManager as BackgroundManagerImpl,
+        )
+        from simple_agent.managers.message import MessageBus as MessageBusImpl
+        from simple_agent.managers.skill import SkillLoader as SkillLoaderImpl
+        from simple_agent.managers.task import TaskManager as TaskManagerImpl
+        from simple_agent.managers.teammate import TeammateManager as TeammateManagerImpl
+
+        # Create managers if not provided
+        from simple_agent.managers.todo import TodoManager as TodoManagerImpl
+
+        todo = todo_manager or TodoManagerImpl()
+        task = task_manager or TaskManagerImpl(settings)
+        bg = background_manager or BackgroundManagerImpl(settings)
+        bus = message_bus or MessageBusImpl(settings)
+        skill = skill_loader or SkillLoaderImpl(settings=settings)
+        teammate = teammate_manager or TeammateManagerImpl(bus, task, settings)
+        provider = _create_provider(settings)
+
+        return AgentContext(
+            settings=settings,
+            todo=todo,
+            task_mgr=task,
+            bg=bg,
+            bus=bus,
+            skill_loader=skill,
+            teammate=teammate,
+            provider=provider,
+        )
+
+    def _initialize_tool_handlers(self) -> None:
+        """Initialize tool handlers with managers from context.
+
+        This sets up the global tool handler state for backward compatibility.
+        Future versions should use dependency injection instead.
+        """
         from simple_agent.tools.tool_handlers import initialize_handlers
 
         initialize_handlers(
-            self.todo,
-            self.task_mgr,
-            self.bg,
-            self.bus,
-            self.teammate,
-            self.skill_loader,
-            self.provider,
-            self.settings,
-        )
-
-    def _create_provider(self):
-        """Create provider instance based on settings."""
-        provider_name = self.settings.get_active_provider()
-        provider_config = self.settings.get_provider_config(provider_name)
-
-        # Get API key from config or environment
-        api_key = provider_config.api_key
-        if not api_key:
-            # Try environment variable fallback
-            env_key_map = {
-                "anthropic": "ANTHROPIC_API_KEY",
-                "openai": "OPENAI_API_KEY",
-                "gemini": "GEMINI_API_KEY",
-                "groq": "GROQ_API_KEY",
-                "local": "dummy",  # Local models don't need API key
-            }
-            import os
-            api_key = os.getenv(env_key_map.get(provider_name, ""))
-
-        if not api_key and provider_name != "local":
-            raise ValueError(f"API key not found for provider '{provider_name}'. "
-                           f"Set {provider_name.upper()}_API_KEY environment variable.")
-
-        return ProviderFactory.create(
-            provider_name=provider_name,
-            api_key=api_key or "dummy",
-            base_url=provider_config.base_url,
-            model=self.settings.model_id or None,
+            self._ctx.todo,
+            self._ctx.task_mgr,
+            self._ctx.bg,
+            self._ctx.bus,
+            self._ctx.teammate,
+            self._ctx.skill_loader,
+            self._ctx.provider,
+            self._ctx.settings,
         )
 
     @property
-    def system_prompt(self) -> str:
-        """Get system prompt for the agent."""
-        return f"""You are a coding agent at {self.settings.workdir}.
-Use tools to solve tasks. Use TodoWrite for multi-step work.
-Use task for subagent delegation. Use load_skill for specialized knowledge.
+    def settings(self) -> Settings:
+        """Get agent settings.
 
-Skills available:
-{self.skill_loader.descriptions()}"""
-
-    def process_query(self, query: str, history: list = None) -> str:
+        Returns:
+            Settings instance
         """
-        Process a user query.
+        return self._ctx.settings
+
+    @property
+    def system_prompt(self) -> str:
+        """Get system prompt for the agent.
+
+        Returns:
+            System prompt string
+        """
+        return self._ctx.system_prompt
+
+    @property
+    def todo(self):
+        """Get todo manager.
+
+        Returns:
+            TodoManager instance
+        """
+        return self._ctx.todo
+
+    @property
+    def task_mgr(self):
+        """Get task manager.
+
+        Returns:
+            TaskManager instance
+        """
+        return self._ctx.task_mgr
+
+    @property
+    def bg(self):
+        """Get background manager.
+
+        Returns:
+            BackgroundManager instance
+        """
+        return self._ctx.bg
+
+    @property
+    def bus(self):
+        """Get message bus.
+
+        Returns:
+            MessageBus instance
+        """
+        return self._ctx.bus
+
+    @property
+    def skill_loader(self):
+        """Get skill loader.
+
+        Returns:
+            SkillLoader instance
+        """
+        return self._ctx.skill_loader
+
+    @property
+    def teammate(self):
+        """Get teammate manager.
+
+        Returns:
+            TeammateManager instance
+        """
+        return self._ctx.teammate
+
+    @property
+    def provider(self):
+        """Get AI provider.
+
+        Returns:
+            BaseProvider instance
+        """
+        return self._ctx.provider
+
+    def process_query(self, query: str, history: Optional[list] = None) -> str:
+        """Process a user query.
+
+        This method delegates to AgentLoop for the actual conversation loop,
+        following the Single Responsibility Principle (SRP).
 
         Args:
             query: User query
-            history: Optional message history
+            history: Optional message history (modified in-place)
 
         Returns:
-            Agent response
+            Agent response string
         """
         if history is None:
             history = []
 
         history.append({"role": "user", "content": query})
-        self._agent_loop(history)
 
-        # Get last assistant response
+        # Use AgentLoop for the conversation logic
+        loop = AgentLoop(self._ctx)
+        loop.run(history)
+
+        # Extract and return the last assistant response
         for msg in reversed(history):
             if msg.get("role") == "assistant":
                 content = msg.get("content", [])
@@ -254,85 +330,23 @@ Skills available:
                 return str(content)
         return "(no response)"
 
-    def _agent_loop(self, messages: list):
-        """Run agent loop until completion."""
-        from simple_agent.tools.tool_handlers import TOOL_HANDLERS, TOOLS
-        from simple_agent.utils.compression import estimate_tokens, microcompact
+    # Backward compatibility property aliases
+    @property
+    def todo_manager(self):
+        """Alias for todo property (backward compatibility)."""
+        return self._ctx.todo
 
-        rounds_without_todo = 0
-        while True:
-            # Compression pipeline
-            microcompact(messages)
-            if estimate_tokens(messages) > self.settings.token_threshold:
-                print("[auto-compact triggered]")
-                messages[:] = auto_compact(
-                    messages, self.provider, self.settings.model_id or "default", self.settings.transcript_dir
-                )
+    @property
+    def task_manager(self):
+        """Alias for task_mgr property (backward compatibility)."""
+        return self._ctx.task_mgr
 
-            # Drain background notifications
-            notifs = self.bg.drain()
-            if notifs:
-                txt = "\n".join(f"[bg:{n['task_id']}] {n['status']}: {n['result']}" for n in notifs)
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": f"<background-results>\n{txt}\n</background-results>",
-                    }
-                )
-                messages.append({"role": "assistant", "content": "Noted background results."})
+    @property
+    def background_manager(self):
+        """Alias for bg property (backward compatibility)."""
+        return self._ctx.bg
 
-            # Check lead inbox
-            inbox = self.bus.read_inbox("lead")
-            if inbox:
-                messages.append(
-                    {"role": "user", "content": f"<inbox>{json.dumps(inbox, indent=2)}</inbox>"}
-                )
-                messages.append({"role": "assistant", "content": "Noted inbox messages."})
-
-            # LLM call
-            response = self.provider.create_message(
-                messages=messages,
-                tools=TOOLS,
-                system=self.system_prompt,
-                max_tokens=self.settings.max_tokens,
-            )
-            messages.append({"role": "assistant", "content": response.content})
-            if response.stop_reason != "tool_use":
-                return
-
-            # Tool execution
-            results = []
-            used_todo = False
-            manual_compress = False
-            for tc in response.tool_calls:
-                if tc.name == "compress":
-                    manual_compress = True
-                handler = TOOL_HANDLERS.get(tc.name)
-                try:
-                    output = (
-                        handler(**tc.input) if handler else f"Unknown tool: {tc.name}"
-                    )
-                except Exception as e:
-                    output = f"Error: {e}"
-                print(f"> {tc.name}: {str(output)[:200]}")
-                results.append(
-                    {"type": "tool_result", "tool_use_id": tc.id, "content": str(output)}
-                )
-                if tc.name == "TodoWrite":
-                    used_todo = True
-
-            # Nag reminder
-            rounds_without_todo = 0 if used_todo else rounds_without_todo + 1
-            if rounds_without_todo >= 3:
-                results.insert(
-                    0, {"type": "text", "text": "<reminder>Update your todos.</reminder>"}
-                )
-
-            messages.append({"role": "user", "content": results})
-
-            # Manual compress
-            if manual_compress:
-                print("[manual compact]")
-                messages[:] = auto_compact(
-                    messages, self.provider, self.settings.model_id or "default", self.settings.transcript_dir
-                )
+    @property
+    def message_bus(self):
+        """Alias for bus property (backward compatibility)."""
+        return self._ctx.bus

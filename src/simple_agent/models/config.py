@@ -1,4 +1,9 @@
-"""Configuration models using Pydantic BaseSettings."""
+"""Configuration models using Pydantic BaseSettings.
+
+This module follows SOLID principles:
+- Single Responsibility Principle (SRP): Settings holds config, ProviderConfigFactory creates configs
+- Open/Closed Principle (OCP): New providers can be added without modifying Settings
+"""
 
 import os
 from pathlib import Path
@@ -14,7 +19,11 @@ if os.getenv("ANTHROPIC_BASE_URL"):
 
 
 class ProviderConfig(BaseModel):
-    """Configuration for a single AI provider."""
+    """Configuration for a single AI provider.
+
+    This class follows the Single Responsibility Principle (SRP)
+    by solely holding provider configuration data.
+    """
 
     api_key: Optional[str] = None
     base_url: Optional[str] = None
@@ -25,7 +34,12 @@ class ProviderConfig(BaseModel):
 
 
 class Settings(BaseSettings):
-    """Application settings with environment variable support."""
+    """Application settings with environment variable support.
+
+    This class follows the Single Responsibility Principle (SRP)
+    by solely being responsible for holding configuration data.
+    All factory logic has been moved to ProviderConfigFactory.
+    """
 
     # Directory paths
     workdir: Path = Field(default_factory=lambda: Path.cwd())
@@ -65,38 +79,145 @@ class Settings(BaseSettings):
         extra = "allow"
         env_file = ".env"
 
-    def get_provider_config(self, provider_name: str) -> ProviderConfig:
-        """Get configuration for a specific provider."""
-        if provider_name in self.providers:
-            return self.providers[provider_name]
-
-        # Create default config from environment variables
-        config = ProviderConfig()
-        if provider_name == "anthropic":
-            config.api_key = self.anthropic_api_key or os.getenv("ANTHROPIC_API_KEY")
-            config.base_url = self.anthropic_base_url
-            config.models = ["claude-sonnet-4-20250514"]
-        elif provider_name == "openai":
-            config.api_key = self.openai_api_key or os.getenv("OPENAI_API_KEY")
-            config.models = ["gpt-4o"]
-        elif provider_name == "gemini":
-            config.api_key = self.gemini_api_key or os.getenv("GEMINI_API_KEY")
-            config.models = ["gemini-2.5-flash-preview-04-17"]
-        elif provider_name == "groq":
-            config.api_key = self.groq_api_key or os.getenv("GROQ_API_KEY")
-            config.models = ["llama-3.3-70b-versatile"]
-        elif provider_name == "local":
-            config.api_key = "dummy"  # Local models don't need real API key
-            config.base_url = "http://localhost:11434/v1"
-            config.models = ["llama3.2"]
-
-        return config
-
     def get_active_provider(self) -> str:
-        """Get the active provider name (runtime override or default)."""
+        """Get the active provider name (runtime override or default).
+
+        Returns:
+            Provider name string
+        """
         return self.provider or self.default_provider
 
 
+class ProviderConfigFactory:
+    """Factory for creating provider configurations.
+
+    This class follows the Single Responsibility Principle (SRP) by
+    solely being responsible for creating provider configurations.
+    It supports the Open/Closed Principle (OCP) by allowing new
+    providers to be registered without modifying the class.
+
+    The factory encapsulates knowledge about default models and
+    environment variable mappings for each provider.
+    """
+
+    # Default models for each provider
+    DEFAULT_MODELS: Dict[str, list] = {
+        "anthropic": ["claude-sonnet-4-20250514"],
+        "openai": ["gpt-4o"],
+        "gemini": ["gemini-2.5-flash-preview-04-17"],
+        "groq": ["llama-3.3-70b-versatile"],
+        "local": ["llama3.2"],
+    }
+
+    # Environment variable names for API keys
+    ENV_KEY_MAP: Dict[str, Optional[str]] = {
+        "anthropic": "ANTHROPIC_API_KEY",
+        "openai": "OPENAI_API_KEY",
+        "gemini": "GEMINI_API_KEY",
+        "groq": "GROQ_API_KEY",
+        "local": None,  # Local models don't need API keys
+    }
+
+    # Default base URLs
+    DEFAULT_BASE_URLS: Dict[str, Optional[str]] = {
+        "local": "http://localhost:11434/v1",
+        # Other providers use their default URLs
+    }
+
+    @classmethod
+    def create_config(cls, settings: Settings, provider_name: str) -> ProviderConfig:
+        """Create provider configuration from settings.
+
+        This method follows the Open/Closed Principle (OCP) by
+        allowing new providers to be added to the class-level
+        dictionaries without modifying this method.
+
+        Args:
+            settings: Application settings
+            provider_name: Name of the provider
+
+        Returns:
+            ProviderConfig instance
+
+        Raises:
+            ValueError: If provider is unknown
+        """
+        # Check if provider has explicit config in settings
+        if provider_name in settings.providers:
+            return settings.providers[provider_name]
+
+        # Validate provider name
+        if provider_name not in cls.DEFAULT_MODELS:
+            raise ValueError(
+                f"Unknown provider: {provider_name}. "
+                f"Available: {list(cls.DEFAULT_MODELS.keys())}"
+            )
+
+        # Create default configuration
+        config = ProviderConfig()
+
+        # Set models
+        config.models = cls.DEFAULT_MODELS.get(provider_name, [])
+
+        # Set API key from environment
+        env_key = cls.ENV_KEY_MAP.get(provider_name)
+        if env_key:
+            config.api_key = os.getenv(env_key)
+
+        # Set base URL if provider has a custom default
+        if provider_name in cls.DEFAULT_BASE_URLS:
+            config.base_url = cls.DEFAULT_BASE_URLS[provider_name]
+
+        # Handle special Anthropic base URL setting
+        if provider_name == "anthropic" and settings.anthropic_base_url:
+            config.base_url = settings.anthropic_base_url
+
+        return config
+
+    @classmethod
+    def register_provider(
+        cls,
+        name: str,
+        models: list,
+        env_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+    ) -> None:
+        """Register a new provider.
+
+        This method supports the Open/Closed Principle (OCP) by
+        allowing new providers to be added at runtime without
+        modifying the source code.
+
+        Args:
+            name: Provider name
+            models: List of default models
+            env_key: Environment variable name for API key (optional)
+            base_url: Default base URL (optional)
+
+        Example:
+            ProviderConfigFactory.register_provider(
+                "custom",
+                models=["custom-model-1"],
+                env_key="CUSTOM_API_KEY",
+                base_url="https://api.example.com"
+            )
+        """
+        cls.DEFAULT_MODELS[name] = models
+        cls.ENV_KEY_MAP[name] = env_key
+        if base_url:
+            cls.DEFAULT_BASE_URLS[name] = base_url
+
+
 def create_settings(**kwargs) -> Settings:
-    """Create Settings instance with optional overrides."""
+    """Create Settings instance with optional overrides.
+
+    This is a convenience factory function for creating Settings
+    with runtime overrides.
+
+    Args:
+        **kwargs: Settings overrides
+
+    Returns:
+        Settings instance
+    """
     return Settings(**kwargs)

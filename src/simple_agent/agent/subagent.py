@@ -1,0 +1,205 @@
+"""Sub-agent runner for isolated task execution.
+
+This module implements the SubAgentRunner class which follows the
+Single Responsibility Principle (SRP) by solely being responsible for
+running sub-agents with isolated tool access.
+"""
+
+from typing import Any, Callable, Dict, List
+
+from simple_agent.providers.base import BaseProvider
+
+
+class SubAgentRunner:
+    """Runner for sub-agent execution.
+
+    This class has a single responsibility: running sub-agents with
+    appropriate tool access based on the agent type. It follows the
+    Single Responsibility Principle (SRP).
+
+    Attributes:
+        provider: AI provider to use for sub-agent
+    """
+
+    def __init__(self, provider: BaseProvider) -> None:
+        """Initialize the sub-agent runner.
+
+        Args:
+            provider: AI provider instance
+        """
+        self._provider = provider
+
+    def run(self, prompt: str, agent_type: str = "Explore") -> str:
+        """Run a sub-agent with the given prompt.
+
+        The sub-agent has limited tool access based on the agent_type:
+        - "Explore": Only read_file and bash tools
+        - Other types: All tools including write_file and edit_file
+
+        Args:
+            prompt: Prompt for the sub-agent
+            agent_type: Type of agent ("Explore" or "general-purpose")
+
+        Returns:
+            Summary of sub-agent work
+        """
+        tools = self._build_tools(agent_type)
+        handlers = self._build_handlers()
+        messages = [{"role": "user", "content": prompt}]
+
+        for _ in range(30):
+            resp = self._provider.create_message(
+                messages=messages, tools=tools, max_tokens=8000
+            )
+            messages.append({"role": "assistant", "content": resp.content})
+
+            if resp.stop_reason != "tool_use":
+                break
+
+            results = self._execute_tools(resp, handlers)
+            messages.append({"role": "user", "content": results})
+
+        return self._extract_summary(resp)
+
+    def _build_tools(self, agent_type: str) -> List[Dict[str, Any]]:
+        """Build tool list for sub-agent.
+
+        Args:
+            agent_type: Type of agent
+
+        Returns:
+            List of tool definitions
+        """
+        base_tools = [
+            {
+                "name": "bash",
+                "description": "Run command.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"command": {"type": "string"}},
+                    "required": ["command"],
+                },
+            },
+            {
+                "name": "read_file",
+                "description": "Read file.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"path": {"type": "string"}},
+                    "required": ["path"],
+                },
+            },
+        ]
+
+        if agent_type != "Explore":
+            base_tools.extend(
+                [
+                    {
+                        "name": "write_file",
+                        "description": "Write file.",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "path": {"type": "string"},
+                                "content": {"type": "string"},
+                            },
+                            "required": ["path", "content"],
+                        },
+                    },
+                    {
+                        "name": "edit_file",
+                        "description": "Edit file.",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "path": {"type": "string"},
+                                "old_text": {"type": "string"},
+                                "new_text": {"type": "string"},
+                            },
+                            "required": ["path", "old_text", "new_text"],
+                        },
+                    },
+                ]
+            )
+
+        return base_tools
+
+    def _build_handlers(self) -> Dict[str, Callable]:
+        """Build tool handlers for sub-agent.
+
+        Returns:
+            Dictionary mapping tool names to handler functions
+        """
+        from simple_agent.tools.bash_tools import run_bash
+        from simple_agent.tools.file_tools import edit_file, read_file, write_file
+
+        handlers = {
+            "bash": lambda **kw: run_bash(kw["command"]),
+            "read_file": lambda **kw: read_file(kw["path"]),
+            "write_file": lambda **kw: write_file(kw["path"], kw["content"]),
+            "edit_file": lambda **kw: edit_file(kw["path"], kw["old_text"], kw["new_text"]),
+        }
+
+        return handlers
+
+    def _execute_tools(
+        self, response: Any, handlers: Dict[str, Callable]
+    ) -> List[Dict[str, Any]]:
+        """Execute tool calls from response.
+
+        Args:
+            response: Provider response with tool calls
+            handlers: Tool handler functions
+
+        Returns:
+            List of tool results
+        """
+        results = []
+        for tc in response.tool_calls:
+            h = handlers.get(tc.name, lambda **kw: "Unknown tool")
+            results.append(
+                {
+                    "type": "tool_result",
+                    "tool_use_id": tc.id,
+                    "content": str(h(**tc.input))[:50000],
+                }
+            )
+        return results
+
+    def _extract_summary(self, response: Any) -> str:
+        """Extract text summary from response.
+
+        Args:
+            response: Provider response
+
+        Returns:
+            Extracted text or placeholder
+        """
+        if not response:
+            return "(subagent failed)"
+
+        text_parts = []
+        for c in response.content:
+            if isinstance(c, dict) and c.get("type") == "text":
+                text_parts.append(c.get("text", ""))
+        return "".join(text_parts) or "(no summary)"
+
+
+# Backward compatibility function
+def run_subagent(
+    provider: BaseProvider, prompt: str, agent_type: str = "Explore"
+) -> str:
+    """Run a subagent for isolated exploration or work.
+
+    This is a backward compatibility wrapper that uses SubAgentRunner.
+
+    Args:
+        provider: AI provider instance
+        prompt: Prompt for subagent
+        agent_type: Type of agent (Explore or general-purpose)
+
+    Returns:
+        Summary of subagent work
+    """
+    runner = SubAgentRunner(provider)
+    return runner.run(prompt, agent_type)
