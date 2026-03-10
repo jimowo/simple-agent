@@ -1,8 +1,8 @@
 """Base provider class and factory for multi-provider support."""
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -88,7 +88,7 @@ class BaseProvider(ABC):
         pass
 
     @abstractmethod
-    def count_tokens(text: str) -> int:
+    def count_tokens(self, text: str) -> int:
         """Count tokens in text (approximately)."""
         pass
 
@@ -172,10 +172,10 @@ class ProviderFactory:
 # Register built-in providers
 def _register_builtin_providers():
     from simple_agent.providers.anthropic import AnthropicProvider
-    from simple_agent.providers.openai import OpenAIProvider
     from simple_agent.providers.gemini import GeminiProvider
     from simple_agent.providers.groq import GroqProvider
     from simple_agent.providers.local import LocalProvider
+    from simple_agent.providers.openai import OpenAIProvider
 
     ProviderFactory.register("anthropic", AnthropicProvider)
     ProviderFactory.register("openai", OpenAIProvider)

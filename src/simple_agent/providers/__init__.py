@@ -9,12 +9,12 @@ Supports:
 - Local models (Ollama, vLLM)
 """
 
-from simple_agent.providers.base import BaseProvider, ProviderFactory
 from simple_agent.providers.anthropic import AnthropicProvider
-from simple_agent.providers.openai import OpenAIProvider
+from simple_agent.providers.base import BaseProvider, ProviderFactory
 from simple_agent.providers.gemini import GeminiProvider
 from simple_agent.providers.groq import GroqProvider
 from simple_agent.providers.local import LocalProvider
+from simple_agent.providers.openai import OpenAIProvider
 
 __all__ = [
     "BaseProvider",

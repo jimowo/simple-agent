@@ -2,10 +2,10 @@
 
 import os
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Dict, Optional
 
 from dotenv import load_dotenv
-from pydantic import Field, BaseModel
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
 load_dotenv(override=True)

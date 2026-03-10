@@ -1,6 +1,7 @@
 """Groq provider implementation (fast inference)."""
 
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
 from groq import Groq
 
 from simple_agent.providers.base import BaseProvider, ProviderResponse, ToolCall

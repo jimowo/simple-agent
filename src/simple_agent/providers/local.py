@@ -1,6 +1,7 @@
 """Local model provider implementation (Ollama, vLLM)."""
 
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
 from openai import OpenAI
 
 from simple_agent.providers.base import BaseProvider, ProviderResponse, ToolCall

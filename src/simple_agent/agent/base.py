@@ -4,10 +4,10 @@ import json
 import uuid
 
 from simple_agent.models.config import Settings
+from simple_agent.providers import ProviderFactory
 from simple_agent.tools.bash_tools import run_bash
 from simple_agent.tools.file_tools import edit_file, read_file, write_file
 from simple_agent.utils.compression import auto_compact
-from simple_agent.providers import ProviderFactory
 
 
 def run_subagent(

@@ -1,6 +1,7 @@
 """Google Gemini provider implementation using the new google.genai package."""
 
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
 from google import genai
 from google.genai.types import (
     Content,
