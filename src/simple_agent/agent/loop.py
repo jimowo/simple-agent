@@ -22,7 +22,7 @@ def agent_loop(messages: list, agent) -> None:
         if estimate_tokens(messages) > agent.settings.token_threshold:
             print("[auto-compact triggered]")
             messages[:] = auto_compact(
-                messages, agent.client, agent.settings.model_id, agent.settings.transcript_dir
+                messages, agent.provider, agent.settings.model_id or "default", agent.settings.transcript_dir
             )
 
         # Drain background notifications
@@ -43,11 +43,10 @@ def agent_loop(messages: list, agent) -> None:
             messages.append({"role": "assistant", "content": "Noted inbox messages."})
 
         # LLM call
-        response = agent.client.messages.create(
-            model=agent.settings.model_id,
-            system=agent.system_prompt,
+        response = agent.provider.create_message(
             messages=messages,
             tools=TOOLS,
+            system=agent.system_prompt,
             max_tokens=agent.settings.max_tokens,
         )
         messages.append({"role": "assistant", "content": response.content})
@@ -58,21 +57,20 @@ def agent_loop(messages: list, agent) -> None:
         results = []
         used_todo = False
         manual_compress = False
-        for block in response.content:
-            if block.type == "tool_use":
-                if block.name == "compress":
-                    manual_compress = True
-                handler = TOOL_HANDLERS.get(block.name)
-                try:
-                    output = handler(**block.input) if handler else f"Unknown tool: {block.name}"
-                except Exception as e:
-                    output = f"Error: {e}"
-                print(f"> {block.name}: {str(output)[:200]}")
-                results.append(
-                    {"type": "tool_result", "tool_use_id": block.id, "content": str(output)}
-                )
-                if block.name == "TodoWrite":
-                    used_todo = True
+        for tc in response.tool_calls:
+            if tc.name == "compress":
+                manual_compress = True
+            handler = TOOL_HANDLERS.get(tc.name)
+            try:
+                output = handler(**tc.input) if handler else f"Unknown tool: {tc.name}"
+            except Exception as e:
+                output = f"Error: {e}"
+            print(f"> {tc.name}: {str(output)[:200]}")
+            results.append(
+                {"type": "tool_result", "tool_use_id": tc.id, "content": str(output)}
+            )
+            if tc.name == "TodoWrite":
+                used_todo = True
 
         # Nag reminder
         rounds_without_todo = 0 if used_todo else rounds_without_todo + 1
@@ -85,5 +83,5 @@ def agent_loop(messages: list, agent) -> None:
         if manual_compress:
             print("[manual compact]")
             messages[:] = auto_compact(
-                messages, agent.client, agent.settings.model_id, agent.settings.transcript_dir
+                messages, agent.provider, agent.settings.model_id or "default", agent.settings.transcript_dir
             )

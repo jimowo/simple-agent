@@ -4,11 +4,10 @@ import json
 import threading
 import time
 
-from anthropic import Anthropic
-
 from simple_agent.managers.message import MessageBus
 from simple_agent.managers.task import TaskManager
 from simple_agent.models.config import Settings
+from simple_agent.providers import ProviderFactory
 from simple_agent.tools.bash_tools import run_bash
 from simple_agent.tools.file_tools import edit_file, read_file, write_file
 
@@ -47,6 +46,35 @@ class TeammateManager:
                 return m
         return None
 
+    def _create_provider(self):
+        """Create provider instance for teammates."""
+        provider_name = self.settings.get_active_provider()
+        provider_config = self.settings.get_provider_config(provider_name)
+
+        # Get API key from config or environment
+        api_key = provider_config.api_key
+        if not api_key:
+            # Try environment variable fallback
+            env_key_map = {
+                "anthropic": "ANTHROPIC_API_KEY",
+                "openai": "OPENAI_API_KEY",
+                "gemini": "GEMINI_API_KEY",
+                "groq": "GROQ_API_KEY",
+                "local": "dummy",
+            }
+            import os
+            api_key = os.getenv(env_key_map.get(provider_name, ""))
+
+        if not api_key and provider_name != "local":
+            raise ValueError(f"API key not found for provider '{provider_name}'.")
+
+        return ProviderFactory.create(
+            provider_name=provider_name,
+            api_key=api_key or "dummy",
+            base_url=provider_config.base_url,
+            model=self.settings.model_id or None,
+        )
+
     def spawn(self, name: str, role: str, prompt: str) -> str:
         """Spawn a new teammate."""
         member = self._find(name)
@@ -59,14 +87,12 @@ class TeammateManager:
             member = {"name": name, "role": role, "status": "working"}
             self.config["members"].append(member)
         self._save()
-        client = (
-            Anthropic(base_url=self.settings.anthropic_base_url)
-            if self.settings.anthropic_base_url
-            else Anthropic()
-        )
+
+        provider = self._create_provider()
+
         threading.Thread(
             target=self._loop,
-            args=(name, role, prompt, client),
+            args=(name, role, prompt, provider),
             daemon=True,
         ).start()
         return f"Spawned '{name}' (role: {role})"
@@ -78,7 +104,7 @@ class TeammateManager:
             member["status"] = status
             self._save()
 
-    def _loop(self, name: str, role: str, prompt: str, client: Anthropic):
+    def _loop(self, name: str, role: str, prompt: str, provider):
         """Main loop for teammate agent."""
         team_name = self.config["team_name"]
         sys_prompt = (
@@ -162,44 +188,44 @@ class TeammateManager:
                         return
                     messages.append({"role": "user", "content": json.dumps(msg)})
                 try:
-                    response = client.messages.create(
-                        model=self.settings.model_id,
-                        system=sys_prompt,
+                    response = provider.create_message(
                         messages=messages,
                         tools=tools,
+                        system=sys_prompt,
                         max_tokens=8000,
                     )
                 except Exception:
                     self._set_status(name, "shutdown")
                     return
+
                 messages.append({"role": "assistant", "content": response.content})
                 if response.stop_reason != "tool_use":
                     break
+
                 results = []
                 idle_requested = False
-                for block in response.content:
-                    if block.type == "tool_use":
-                        if block.name == "idle":
-                            idle_requested = True
-                            output = "Entering idle phase."
-                        elif block.name == "claim_task":
-                            output = self.task_mgr.claim(block.input["task_id"], name)
-                        elif block.name == "send_message":
-                            output = self.bus.send(name, block.input["to"], block.input["content"])
-                        else:
-                            dispatch = {
-                                "bash": lambda **kw: run_bash(kw["command"]),
-                                "read_file": lambda **kw: read_file(kw["path"]),
-                                "write_file": lambda **kw: write_file(kw["path"], kw["content"]),
-                                "edit_file": lambda **kw: edit_file(
-                                    kw["path"], kw["old_text"], kw["new_text"]
-                                ),
-                            }
-                            output = dispatch.get(block.name, lambda **kw: "Unknown")(**block.input)
-                        print(f"  [{name}] {block.name}: {str(output)[:120]}")
-                        results.append(
-                            {"type": "tool_result", "tool_use_id": block.id, "content": str(output)}
-                        )
+                for tc in response.tool_calls:
+                    if tc.name == "idle":
+                        idle_requested = True
+                        output = "Entering idle phase."
+                    elif tc.name == "claim_task":
+                        output = self.task_mgr.claim(tc.input["task_id"], name)
+                    elif tc.name == "send_message":
+                        output = self.bus.send(name, tc.input["to"], tc.input["content"])
+                    else:
+                        dispatch = {
+                            "bash": lambda **kw: run_bash(kw["command"]),
+                            "read_file": lambda **kw: read_file(kw["path"]),
+                            "write_file": lambda **kw: write_file(kw["path"], kw["content"]),
+                            "edit_file": lambda **kw: edit_file(
+                                kw["path"], kw["old_text"], kw["new_text"]
+                            ),
+                        }
+                        output = dispatch.get(tc.name, lambda **kw: "Unknown")(**tc.input)
+                    print(f"  [{name}] {tc.name}: {str(output)[:120]}")
+                    results.append(
+                        {"type": "tool_result", "tool_use_id": tc.id, "content": str(output)}
+                    )
                 messages.append({"role": "user", "content": results})
                 if idle_requested:
                     break

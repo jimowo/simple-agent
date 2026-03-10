@@ -28,6 +28,7 @@ def _get_agent(settings: Settings = None) -> Agent:
 def main(
     ctx: typer.Context,
     model: Optional[str] = typer.Option(None, "--model", "-m", help="Override model ID"),
+    provider: Optional[str] = typer.Option(None, "--provider", "-p", help="AI provider (anthropic, openai, gemini, groq, local)"),
     workdir: Optional[str] = typer.Option(
         None, "--workdir", "-w", help="Override working directory"
     ),
@@ -36,6 +37,8 @@ def main(
     settings_dict = {}
     if model:
         settings_dict["model_id"] = model
+    if provider:
+        settings_dict["provider"] = provider
     if workdir:
         settings_dict["workdir"] = Path(workdir)
 
@@ -51,7 +54,9 @@ def chat_command(
     agent = _get_agent(settings)
     history = []
 
+    provider_name = settings.get_active_provider()
     console.print(f"[cyan]simple-agent[/cyan] - AI Agent at {settings.workdir}")
+    console.print(f"Provider: [green]{provider_name}[/green] | Model: [yellow]{settings.model_id or 'default'}[/yellow]")
     console.print("Type 'exit' or 'quit' to end the session.\n")
 
     while True:
@@ -205,6 +210,29 @@ def version_command():
     from simple_agent import __version__
 
     console.print(f"simple-agent version [cyan]{__version__}[/cyan]")
+
+
+@app.command("providers")
+def providers_command():
+    """List available AI providers."""
+    from simple_agent.providers import ProviderFactory
+
+    providers = ProviderFactory.list_providers()
+
+    console.print("\n[bold]Available AI Providers:[/bold]\n")
+    for provider in sorted(providers):
+        console.print(f"  - [cyan]{provider}[/cyan]")
+
+    console.print("\n[bold]Usage:[/bold]")
+    console.print("  simple-agent --provider <provider> chat")
+    console.print("  simple-agent --provider openai run \"Hello\"\n")
+
+    console.print("[bold]Environment Variables:[/bold]")
+    console.print("  ANTHROPIC_API_KEY  - For Anthropic Claude")
+    console.print("  OPENAI_API_KEY     - For OpenAI GPT models")
+    console.print("  GEMINI_API_KEY     - For Google Gemini")
+    console.print("  GROQ_API_KEY       - For Groq fast inference")
+    console.print("  (local provider uses Ollama at http://localhost:11434)\n")
 
 
 def main_cli():

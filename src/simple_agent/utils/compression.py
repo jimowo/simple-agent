@@ -41,13 +41,13 @@ def microcompact(messages: List[Any]) -> None:
             part["content"] = "[cleared]"
 
 
-def auto_compact(messages: List[Any], client, model: str, transcript_dir: Path = None) -> List[Any]:
+def auto_compact(messages: List[Any], provider, model: str, transcript_dir: Path = None) -> List[Any]:
     """
     Compress conversation by saving transcript and generating summary.
 
     Args:
         messages: Current message history
-        client: Anthropic client instance
+        provider: AI provider instance
         model: Model ID to use for summarization
         transcript_dir: Directory for transcripts (uses Settings.transcript_dir if None)
 
@@ -64,12 +64,19 @@ def auto_compact(messages: List[Any], client, model: str, transcript_dir: Path =
             f.write(json.dumps(msg, default=str) + "\n")
 
     conv_text = json.dumps(messages, default=str)[:80000]
-    resp = client.messages.create(
-        model=model,
+    resp = provider.create_message(
         messages=[{"role": "user", "content": f"Summarize for continuity:\n{conv_text}"}],
+        tools=[],
         max_tokens=2000,
     )
-    summary = resp.content[0].text
+
+    # Extract text from response content
+    summary = ""
+    for c in resp.content:
+        if isinstance(c, dict) and c.get("type") == "text":
+            summary = c.get("text", "")
+            break
+
     return [
         {"role": "user", "content": f"[Compressed. Transcript: {path}]\n{summary}"},
         {"role": "assistant", "content": "Understood. Continuing with summary context."},

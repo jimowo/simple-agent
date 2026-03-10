@@ -4,6 +4,7 @@ A Pydantic-style AI Agent implementation with tool dispatch, task management, an
 
 ## Features
 
+- **Multi-Provider Support**: Support for Anthropic, OpenAI, Gemini, Groq, and local models (Ollama)
 - **Tool Dispatch**: Extensible tool system with 25+ built-in tools
 - **Task Management**: Persistent file-based task tracking
 - **Team Collaboration**: Multi-agent system with message bus
@@ -20,6 +21,7 @@ simple-agent/
 │   ├── tools/          # Tool system
 │   ├── managers/       # Task, todo, background, messaging, etc.
 │   ├── models/         # Pydantic models (config, messages, tasks)
+│   ├── providers/      # AI provider implementations
 │   ├── utils/          # Compression, safety utilities
 │   └── cli.py          # CLI entry point
 ├── tests/              # Test files
@@ -63,6 +65,84 @@ IDLE_TIMEOUT=60
 BASH_TIMEOUT=120
 ```
 
+## AI Providers
+
+simple-agent supports multiple AI providers out of the box:
+
+### Available Providers
+
+| Provider | Description | Models |
+|----------|-------------|--------|
+| `anthropic` | Anthropic Claude (default) | claude-sonnet-4, claude-3-5-sonnet, claude-3-5-haiku |
+| `openai` | OpenAI GPT models | gpt-4o, o1, o3-mini, gpt-4o-mini |
+| `gemini` | Google Gemini | gemini-2.5-flash, gemini-2.5-pro, gemini-2.0-flash |
+| `groq` | Groq fast inference | llama-3.3-70b, mixtral-8x7b, gemma2-9b |
+| `local` | Local models via Ollama | llama3.2, qwen2.5, mistral, codellama |
+
+### Provider Configuration
+
+Set the appropriate API key in your `.env` file:
+
+```env
+# Anthropic (default)
+ANTHROPIC_API_KEY=your_key_here
+
+# OpenAI
+OPENAI_API_KEY=your_key_here
+
+# Google Gemini
+GEMINI_API_KEY=your_key_here
+
+# Groq
+GROQ_API_KEY=your_key_here
+
+# Local models (Ollama) - no API key needed
+# Make sure Ollama is running: ollama serve
+```
+
+### Local Models with Ollama
+
+To use local models, you need to install and run Ollama:
+
+```bash
+# Install Ollama (macOS/Linux)
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Or download from https://ollama.com for Windows
+
+# Pull a model
+ollama pull llama3.2
+
+# Start the Ollama server
+ollama serve
+
+# Use with simple-agent
+uv run simple-agent --provider local chat
+uv run simple-agent --provider local --model codellama run "Write a Python function"
+```
+
+### Using Different Providers
+
+```bash
+# Use OpenAI
+uv run simple-agent --provider openai chat
+
+# Use Gemini
+uv run simple-agent --provider gemini run "Explain quantum computing"
+
+# Use Groq for fast inference
+uv run simple-agent --provider groq chat
+
+# Use local models (Ollama must be running)
+uv run simple-agent --provider local chat
+```
+
+### List Available Providers
+
+```bash
+uv run simple-agent providers
+```
+
 ## Usage
 
 ### CLI Commands
@@ -100,6 +180,7 @@ uv run simple-agent version
 |---------|-------------|
 | `chat` | Start interactive chat mode |
 | `run` | Run a single prompt and exit |
+| `providers` | List available AI providers |
 | `task-list` | List all tasks |
 | `task-create` | Create a new task |
 | `task-get` | Get task details by ID |
@@ -112,6 +193,7 @@ uv run simple-agent version
 
 | Option | Short | Description |
 |--------|-------|-------------|
+| `--provider` | `-p` | AI provider (anthropic, openai, gemini, groq, local) |
 | `--model` | `-m` | Override model ID |
 | `--workdir` | `-w` | Override working directory |
 

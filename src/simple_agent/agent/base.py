@@ -3,21 +3,21 @@
 import json
 import uuid
 
-from anthropic import Anthropic
-
 from simple_agent.models.config import Settings
 from simple_agent.tools.bash_tools import run_bash
 from simple_agent.tools.file_tools import edit_file, read_file, write_file
 from simple_agent.utils.compression import auto_compact
+from simple_agent.providers import ProviderFactory
 
 
-def run_subagent(client: Anthropic, model: str, prompt: str, agent_type: str = "Explore") -> str:
+def run_subagent(
+    provider, prompt: str, agent_type: str = "Explore"
+) -> str:
     """
     Run a subagent for isolated exploration or work.
 
     Args:
-        client: Anthropic client
-        model: Model ID
+        provider: AI provider instance
         prompt: Prompt for subagent
         agent_type: Type of agent (Explore or general-purpose)
 
@@ -80,27 +80,30 @@ def run_subagent(client: Anthropic, model: str, prompt: str, agent_type: str = "
     sub_msgs = [{"role": "user", "content": prompt}]
     resp = None
     for _ in range(30):
-        resp = client.messages.create(
-            model=model, messages=sub_msgs, tools=sub_tools, max_tokens=8000
+        resp = provider.create_message(
+            messages=sub_msgs, tools=sub_tools, max_tokens=8000
         )
         sub_msgs.append({"role": "assistant", "content": resp.content})
         if resp.stop_reason != "tool_use":
             break
         results = []
-        for b in resp.content:
-            if b.type == "tool_use":
-                h = sub_handlers.get(b.name, lambda **kw: "Unknown tool")
-                results.append(
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": b.id,
-                        "content": str(h(**b.input))[:50000],
-                    }
-                )
+        for tc in resp.tool_calls:
+            h = sub_handlers.get(tc.name, lambda **kw: "Unknown tool")
+            results.append(
+                {
+                    "type": "tool_result",
+                    "tool_use_id": tc.id,
+                    "content": str(h(**tc.input))[:50000],
+                }
+            )
         sub_msgs.append({"role": "user", "content": results})
 
     if resp:
-        return "".join(b.text for b in resp.content if hasattr(b, "text")) or "(no summary)"
+        text_parts = []
+        for c in resp.content:
+            if isinstance(c, dict) and c.get("type") == "text":
+                text_parts.append(c.get("text", ""))
+        return "".join(text_parts) or "(no summary)"
     return "(subagent failed)"
 
 
@@ -150,11 +153,9 @@ class Agent:
         skill_loader=None,
     ):
         self.settings = settings or Settings()
-        self.client = (
-            Anthropic(base_url=self.settings.anthropic_base_url)
-            if self.settings.anthropic_base_url
-            else Anthropic()
-        )
+
+        # Initialize provider
+        self.provider = self._create_provider()
 
         # Managers
         from simple_agent.managers.background import BackgroundManager
@@ -181,8 +182,38 @@ class Agent:
             self.bus,
             self.teammate,
             self.skill_loader,
-            self.client,
+            self.provider,
             self.settings,
+        )
+
+    def _create_provider(self):
+        """Create provider instance based on settings."""
+        provider_name = self.settings.get_active_provider()
+        provider_config = self.settings.get_provider_config(provider_name)
+
+        # Get API key from config or environment
+        api_key = provider_config.api_key
+        if not api_key:
+            # Try environment variable fallback
+            env_key_map = {
+                "anthropic": "ANTHROPIC_API_KEY",
+                "openai": "OPENAI_API_KEY",
+                "gemini": "GEMINI_API_KEY",
+                "groq": "GROQ_API_KEY",
+                "local": "dummy",  # Local models don't need API key
+            }
+            import os
+            api_key = os.getenv(env_key_map.get(provider_name, ""))
+
+        if not api_key and provider_name != "local":
+            raise ValueError(f"API key not found for provider '{provider_name}'. "
+                           f"Set {provider_name.upper()}_API_KEY environment variable.")
+
+        return ProviderFactory.create(
+            provider_name=provider_name,
+            api_key=api_key or "dummy",
+            base_url=provider_config.base_url,
+            model=self.settings.model_id or None,
         )
 
     @property
@@ -235,7 +266,7 @@ Skills available:
             if estimate_tokens(messages) > self.settings.token_threshold:
                 print("[auto-compact triggered]")
                 messages[:] = auto_compact(
-                    messages, self.client, self.settings.model_id, self.settings.transcript_dir
+                    messages, self.provider, self.settings.model_id or "default", self.settings.transcript_dir
                 )
 
             # Drain background notifications
@@ -259,11 +290,10 @@ Skills available:
                 messages.append({"role": "assistant", "content": "Noted inbox messages."})
 
             # LLM call
-            response = self.client.messages.create(
-                model=self.settings.model_id,
-                system=self.system_prompt,
+            response = self.provider.create_message(
                 messages=messages,
                 tools=TOOLS,
+                system=self.system_prompt,
                 max_tokens=self.settings.max_tokens,
             )
             messages.append({"role": "assistant", "content": response.content})
@@ -274,23 +304,22 @@ Skills available:
             results = []
             used_todo = False
             manual_compress = False
-            for block in response.content:
-                if block.type == "tool_use":
-                    if block.name == "compress":
-                        manual_compress = True
-                    handler = TOOL_HANDLERS.get(block.name)
-                    try:
-                        output = (
-                            handler(**block.input) if handler else f"Unknown tool: {block.name}"
-                        )
-                    except Exception as e:
-                        output = f"Error: {e}"
-                    print(f"> {block.name}: {str(output)[:200]}")
-                    results.append(
-                        {"type": "tool_result", "tool_use_id": block.id, "content": str(output)}
+            for tc in response.tool_calls:
+                if tc.name == "compress":
+                    manual_compress = True
+                handler = TOOL_HANDLERS.get(tc.name)
+                try:
+                    output = (
+                        handler(**tc.input) if handler else f"Unknown tool: {tc.name}"
                     )
-                    if block.name == "TodoWrite":
-                        used_todo = True
+                except Exception as e:
+                    output = f"Error: {e}"
+                print(f"> {tc.name}: {str(output)[:200]}")
+                results.append(
+                    {"type": "tool_result", "tool_use_id": tc.id, "content": str(output)}
+                )
+                if tc.name == "TodoWrite":
+                    used_todo = True
 
             # Nag reminder
             rounds_without_todo = 0 if used_todo else rounds_without_todo + 1
@@ -305,5 +334,5 @@ Skills available:
             if manual_compress:
                 print("[manual compact]")
                 messages[:] = auto_compact(
-                    messages, self.client, self.settings.model_id, self.settings.transcript_dir
+                    messages, self.provider, self.settings.model_id or "default", self.settings.transcript_dir
                 )

@@ -2,8 +2,6 @@
 
 from typing import Callable, Dict
 
-from anthropic import Anthropic
-
 from simple_agent.models.config import Settings
 from simple_agent.tools.base import ToolRegistry
 from simple_agent.tools.bash_tools import run_bash
@@ -19,7 +17,7 @@ _background_manager = None
 _message_bus = None
 _teammate_manager = None
 _skill_loader = None
-_client: Anthropic = None
+_provider = None
 _settings: Settings = None
 
 
@@ -30,13 +28,13 @@ def initialize_handlers(
     message_bus,
     teammate_manager,
     skill_loader,
-    client,
+    provider,
     settings,
 ):
     """Initialize handlers with manager instances."""
     global _todo_manager, _task_manager, _background_manager
     global _message_bus, _teammate_manager, _skill_loader
-    global _client, _settings
+    global _provider, _settings
 
     _todo_manager = todo_manager
     _task_manager = task_manager
@@ -44,7 +42,7 @@ def initialize_handlers(
     _message_bus = message_bus
     _teammate_manager = teammate_manager
     _skill_loader = skill_loader
-    _client = client
+    _provider = provider
     _settings = settings
 
 
@@ -72,7 +70,7 @@ def handle_todo_write(items: list) -> str:
 def handle_task(prompt: str, agent_type: str = "Explore") -> str:
     from simple_agent.agent.base import run_subagent
 
-    return run_subagent(_client, _settings.model_id, prompt, agent_type)
+    return run_subagent(_provider, prompt, agent_type)
 
 
 def handle_load_skill(name: str) -> str:
