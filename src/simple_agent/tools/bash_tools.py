@@ -31,9 +31,26 @@ def run_bash(command: str, workdir: Path = None, timeout: int = 120) -> str:
             cwd=workdir,
             capture_output=True,
             text=True,
+            encoding='utf-8',
+            errors='replace',  # Replace characters that can't be decoded
             timeout=timeout,
         )
         out = (r.stdout + r.stderr).strip()
         return out[:50000] if out else "(no output)"
     except subprocess.TimeoutExpired:
         return f"Error: Timeout ({timeout}s)"
+    except UnicodeDecodeError:
+        # Fallback to system default encoding if UTF-8 fails
+        try:
+            r = subprocess.run(
+                command,
+                shell=True,
+                cwd=workdir,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+            out = (r.stdout + r.stderr).strip()
+            return out[:50000] if out else "(no output)"
+        except Exception as e:
+            return f"Error: {e}"

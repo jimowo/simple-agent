@@ -124,11 +124,29 @@ class ProviderFactory:
     """Factory for creating provider instances."""
 
     _providers: Dict[str, type] = {}
+    _registered = False
 
     @classmethod
     def register(cls, name: str, provider_class: type):
         """Register a provider class."""
         cls._providers[name] = provider_class
+
+    @classmethod
+    def _ensure_registered(cls):
+        """Ensure built-in providers are registered (lazy initialization)."""
+        if not cls._registered:
+            from simple_agent.providers.anthropic import AnthropicProvider
+            from simple_agent.providers.gemini import GeminiProvider
+            from simple_agent.providers.groq import GroqProvider
+            from simple_agent.providers.local import LocalProvider
+            from simple_agent.providers.openai import OpenAIProvider
+
+            cls.register("anthropic", AnthropicProvider)
+            cls.register("openai", OpenAIProvider)
+            cls.register("gemini", GeminiProvider)
+            cls.register("groq", GroqProvider)
+            cls.register("local", LocalProvider)
+            cls._registered = True
 
     @classmethod
     def create(
@@ -155,6 +173,7 @@ class ProviderFactory:
         Raises:
             ValueError: If provider is not registered
         """
+        cls._ensure_registered()
         provider_class = cls._providers.get(provider_name)
         if provider_class is None:
             raise ValueError(
@@ -166,22 +185,5 @@ class ProviderFactory:
     @classmethod
     def list_providers(cls) -> List[str]:
         """List all registered providers."""
+        cls._ensure_registered()
         return list(cls._providers.keys())
-
-
-# Register built-in providers
-def _register_builtin_providers():
-    from simple_agent.providers.anthropic import AnthropicProvider
-    from simple_agent.providers.gemini import GeminiProvider
-    from simple_agent.providers.groq import GroqProvider
-    from simple_agent.providers.local import LocalProvider
-    from simple_agent.providers.openai import OpenAIProvider
-
-    ProviderFactory.register("anthropic", AnthropicProvider)
-    ProviderFactory.register("openai", OpenAIProvider)
-    ProviderFactory.register("gemini", GeminiProvider)
-    ProviderFactory.register("groq", GroqProvider)
-    ProviderFactory.register("local", LocalProvider)
-
-
-_register_builtin_providers()
