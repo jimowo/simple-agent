@@ -10,6 +10,7 @@ dependencies = [
     "google-genai>=1.0.0",
     "groq>=0.4.0",
     "python-dotenv>=1.0.0",
+    "prompt_toolkit>=3.0.0",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
     "typer>=0.12.0",
@@ -39,7 +40,7 @@ all = [
 ]
 
 [project.scripts]
-simple-agent = "simple_agent.cli:main_cli"
+simple-agent = "simple_agent.cli.main:main_cli"
 
 [build-system]
 requires = ["hatchling"]

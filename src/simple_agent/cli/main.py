@@ -9,6 +9,7 @@ from rich.markdown import Markdown
 
 from simple_agent.agent.base import Agent
 from simple_agent.agent.loop import agent_loop
+from simple_agent.cli import InteractivePrompt
 from simple_agent.models.config import Settings, create_settings
 from simple_agent.permissions.manager import PermissionManager
 
@@ -108,11 +109,19 @@ def chat_command(
     provider_name = settings.get_active_provider()
     console.print(f"[cyan]simple-agent[/cyan] - AI Agent at {settings.workdir}")
     console.print(f"Provider: [green]{provider_name}[/green] | Model: [yellow]{settings.model_id or 'default'}[/yellow]")
-    console.print("Type 'exit' or 'quit' to end the session.\n")
+    console.print("Type 'exit' or 'quit' to end the session.")
+    console.print("Use [cyan]↑/↓[/cyan] arrows for history, [cyan]Tab[/cyan] for completion.\n")
+
+    # Create interactive prompt with history support
+    prompt_session = InteractivePrompt(
+        history_file=settings.workdir / ".chat_history",
+        history_size=1000,
+        enable_completion=True,
+    )
 
     while True:
         try:
-            query = typer.prompt("\n>>> ", prompt_suffix="")
+            query = prompt_session.prompt("\n>>> ")
         except (EOFError, KeyboardInterrupt):
             break
 
