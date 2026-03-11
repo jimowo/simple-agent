@@ -11,7 +11,7 @@ import shlex
 from pathlib import Path
 from typing import List, Pattern, Set
 
-from simple_agent.exceptions import PathTraversalError, CommandInjectionError
+from simple_agent.exceptions import PathTraversalError
 from simple_agent.models.config import Settings
 
 

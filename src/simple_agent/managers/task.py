@@ -2,16 +2,20 @@
 
 import json
 
-from simple_agent.models.config import Settings
+from simple_agent.managers.base import BaseManager
 
 
-class TaskManager:
+class TaskManager(BaseManager):
     """Manager for persistent file-based tasks."""
 
-    def __init__(self, settings: Settings = None):
-        self.settings = settings or Settings()
-        self.tasks_dir = self.settings.tasks_dir
-        self.tasks_dir.mkdir(exist_ok=True)
+    def __init__(self, settings=None):
+        """Initialize the task manager.
+
+        Args:
+            settings: Optional Settings instance
+        """
+        super().__init__(settings)
+        self.tasks_dir = self._ensure_dir(self.settings.tasks_dir)
 
     def _next_id(self) -> int:
         """Get next available task ID."""

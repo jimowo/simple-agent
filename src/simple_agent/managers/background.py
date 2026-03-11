@@ -5,15 +5,21 @@ import threading
 import uuid
 from queue import Queue
 
-from simple_agent.models.config import Settings
+from simple_agent.managers.base import BaseManager
+from simple_agent.utils.constants import MAX_BASH_OUTPUT
 from simple_agent.utils.logger import LoggerMixin
 
 
-class BackgroundManager(LoggerMixin):
+class BackgroundManager(BaseManager, LoggerMixin):
     """Manager for background task execution."""
 
-    def __init__(self, settings: Settings = None):
-        self.settings = settings or Settings()
+    def __init__(self, settings=None):
+        """Initialize the background manager.
+
+        Args:
+            settings: Optional Settings instance
+        """
+        super().__init__(settings)
         self.tasks = {}
         self.notifications = Queue()
 
@@ -37,7 +43,7 @@ class BackgroundManager(LoggerMixin):
                 text=True,
                 timeout=timeout,
             )
-            output = (r.stdout + r.stderr).strip()[:50000]
+            output = (r.stdout + r.stderr).strip()[:MAX_BASH_OUTPUT]
             self.tasks[tid].update({"status": "completed", "result": output or "(no output)"})
             self.logger.success("Task {} completed: {}", tid, tid)
         except Exception as e:

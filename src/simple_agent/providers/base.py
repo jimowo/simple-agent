@@ -87,10 +87,14 @@ class BaseProvider(ABC):
         """
         pass
 
-    @abstractmethod
     def count_tokens(self, text: str) -> int:
-        """Count tokens in text (approximately)."""
-        pass
+        """
+        Count tokens in text (approximately).
+
+        Default implementation uses the rough estimate: 1 token ~ 4 characters.
+        Subclasses can override this for more accurate token counting if needed.
+        """
+        return len(text) // 4
 
     def convert_messages_to_format(
         self, messages: List[Dict[str, Any]]

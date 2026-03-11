@@ -2,7 +2,7 @@
 
 from typing import List
 
-from simple_agent.exceptions import TodoLimitError, TaskValidationError
+from simple_agent.exceptions import TaskValidationError, TodoLimitError
 from simple_agent.models.tasks import TodoItem
 from simple_agent.utils.logger import LoggerMixin
 

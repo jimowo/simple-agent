@@ -1,14 +1,9 @@
 """Local model provider implementation (Ollama, vLLM)."""
 
-import json
-from typing import Any, Dict, List, Optional
-
-from openai import OpenAI
-
-from simple_agent.providers.base import BaseProvider, ProviderResponse, ToolCall
+from simple_agent.providers.openai_compatible import OpenAICompatibleProvider
 
 
-class LocalProvider(BaseProvider):
+class LocalProvider(OpenAICompatibleProvider):
     """
     Local model provider using Ollama or vLLM.
 
@@ -26,6 +21,11 @@ class LocalProvider(BaseProvider):
     DEFAULT_BASE_URL = "http://localhost:11434/v1"  # Ollama default
 
     def __init__(self, **kwargs):
+        """Initialize local provider.
+
+        Args:
+            **kwargs: Arguments passed to parent class
+        """
         super().__init__(**kwargs)
         if self.base_url is None:
             self.base_url = self.DEFAULT_BASE_URL
@@ -36,62 +36,26 @@ class LocalProvider(BaseProvider):
             self.api_key = "ollama"
 
     def create_client(self):
-        """Create OpenAI-compatible client for local models."""
+        """Create OpenAI-compatible client for local models.
+
+        Returns:
+            OpenAI-compatible client instance
+        """
+        from openai import OpenAI
+
         return OpenAI(api_key=self.api_key, base_url=self.base_url)
 
-    def convert_messages_to_format(
-        self, messages: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
-        """Convert to OpenAI-compatible message format."""
-        formatted = []
-        for msg in messages:
-            formatted_msg = {"role": msg["role"], "content": msg["content"]}
-            formatted.append(formatted_msg)
-        return formatted
+    def create_message(self, *args, **kwargs):
+        """Create a message using local model API with helpful error handling.
 
-    def convert_tools_to_format(self, tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Convert to OpenAI-compatible function format."""
-        local_tools = []
-        for tool in tools:
-            local_tool = {
-                "type": "function",
-                "function": {
-                    "name": tool["name"],
-                    "description": tool.get("description", ""),
-                    "parameters": tool.get("input_schema", {}),
-                },
-            }
-            local_tools.append(local_tool)
-        return local_tools
+        Returns:
+            ProviderResponse with standardized format
 
-    def create_message(
-        self,
-        messages: List[Dict[str, Any]],
-        tools: List[Dict[str, Any]],
-        system: Optional[str] = None,
-        max_tokens: int = 8000,
-        **kwargs,
-    ) -> ProviderResponse:
-        """Create a message using local model API."""
-        formatted_messages = self.convert_messages_to_format(messages)
-
-        # Add system message at the beginning
-        if system:
-            formatted_messages.insert(0, {"role": "system", "content": system})
-
-        params = {
-            "model": self.model,
-            "messages": formatted_messages,
-            "max_tokens": max_tokens,
-            **kwargs,
-        }
-
-        if tools:
-            params["tools"] = self.convert_tools_to_format(tools)
-
+        Raises:
+            ConnectionError: If cannot connect to local model server
+        """
         try:
-            response = self.client.chat.completions.create(**params)
-            return self.convert_response_to_standard(response)
+            return super().create_message(*args, **kwargs)
         except Exception as e:
             # Provide helpful error message for common issues
             error_msg = str(e).lower()
@@ -102,44 +66,3 @@ class LocalProvider(BaseProvider):
                     f"For Ollama: 'ollama serve'"
                 ) from e
             raise
-
-    def convert_response_to_standard(self, response: Any) -> ProviderResponse:
-        """Convert local model response to standard format."""
-        content = []
-        tool_calls = []
-
-        message = response.choices[0].message
-
-        # Text content
-        if hasattr(message, "content") and message.content:
-            content.append({"type": "text", "text": message.content})
-
-        # Tool calls (if supported by the model)
-        if hasattr(message, "tool_calls") and message.tool_calls:
-            for tc in message.tool_calls:
-                tool_calls.append(
-                    ToolCall(
-                        id=tc.id,
-                        name=tc.function.name,
-                        input=json.loads(tc.function.arguments),
-                    )
-                )
-
-        usage = None
-        if hasattr(response, "usage"):
-            usage = {
-                "input_tokens": response.usage.prompt_tokens,
-                "output_tokens": response.usage.completion_tokens,
-            }
-
-        return ProviderResponse(
-            content=content,
-            tool_calls=tool_calls,
-            stop_reason=response.choices[0].finish_reason,
-            usage=usage,
-        )
-
-    @staticmethod
-    def count_tokens(text: str) -> int:
-        """Approximate token count for local models."""
-        return len(text) // 4

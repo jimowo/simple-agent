@@ -9,14 +9,11 @@ import os
 from pathlib import Path
 from typing import Dict, Optional
 
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
 from simple_agent.exceptions import InvalidProviderError
-
-from dotenv import load_dotenv
-from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings
 
 load_dotenv(override=True)
 if os.getenv("ANTHROPIC_BASE_URL"):

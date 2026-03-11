@@ -34,7 +34,7 @@ Exception Hierarchy:
         └── ServiceValidationError
 """
 
-from typing import Any, Optional
+from typing import Optional
 
 
 class SimpleAgentError(Exception):

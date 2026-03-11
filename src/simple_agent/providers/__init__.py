@@ -15,6 +15,7 @@ from simple_agent.providers.gemini import GeminiProvider
 from simple_agent.providers.groq import GroqProvider
 from simple_agent.providers.local import LocalProvider
 from simple_agent.providers.openai import OpenAIProvider
+from simple_agent.providers.openai_compatible import OpenAICompatibleProvider
 
 __all__ = [
     "BaseProvider",
@@ -24,4 +25,5 @@ __all__ = [
     "GeminiProvider",
     "GroqProvider",
     "LocalProvider",
+    "OpenAICompatibleProvider",
 ]

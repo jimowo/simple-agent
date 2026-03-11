@@ -3,6 +3,7 @@
 import json
 import threading
 import time
+from typing import Any, Dict, List
 
 from simple_agent.managers.message import MessageBus
 from simple_agent.managers.task import TaskManager
@@ -20,6 +21,13 @@ class TeammateManager:
     """Manager for autonomous teammate agents."""
 
     def __init__(self, bus: MessageBus, task_mgr: TaskManager, settings: Settings = None):
+        """Initialize the teammate manager.
+
+        Args:
+            bus: Message bus for communication
+            task_mgr: Task manager instance
+            settings: Optional settings
+        """
         self.settings = settings or Settings()
         self.bus = bus
         self.task_mgr = task_mgr
@@ -30,7 +38,11 @@ class TeammateManager:
         self.threads = {}
 
     def _load(self) -> dict:
-        """Load team configuration."""
+        """Load team configuration.
+
+        Returns:
+            Team configuration dict
+        """
         if self.config_path.exists():
             return json.loads(self.config_path.read_text())
         return {"team_name": "default", "members": []}
@@ -40,14 +52,25 @@ class TeammateManager:
         self.config_path.write_text(json.dumps(self.config, indent=2))
 
     def _find(self, name: str) -> dict:
-        """Find member by name."""
+        """Find member by name.
+
+        Args:
+            name: Member name
+
+        Returns:
+            Member dict or None
+        """
         for m in self.config["members"]:
             if m["name"] == name:
                 return m
         return None
 
     def _create_provider(self):
-        """Create provider instance for teammates."""
+        """Create provider instance for teammates.
+
+        Returns:
+            Provider instance
+        """
         provider_name = self.settings.get_active_provider()
         provider_config = self.settings.get_provider_config(provider_name)
 
@@ -63,6 +86,7 @@ class TeammateManager:
                 "local": "dummy",
             }
             import os
+
             api_key = os.getenv(env_key_map.get(provider_name, ""))
 
         if not api_key and provider_name != "local":
@@ -76,7 +100,16 @@ class TeammateManager:
         )
 
     def spawn(self, name: str, role: str, prompt: str) -> str:
-        """Spawn a new teammate."""
+        """Spawn a new teammate.
+
+        Args:
+            name: Teammate name
+            role: Teammate role
+            prompt: Initial prompt
+
+        Returns:
+            Success message
+        """
         member = self._find(name)
         if member:
             if member["status"] not in ("idle", "shutdown"):
@@ -98,196 +131,245 @@ class TeammateManager:
         return f"Spawned '{name}' (role: {role})"
 
     def _set_status(self, name: str, status: str):
-        """Set member status."""
+        """Set member status.
+
+        Args:
+            name: Member name
+            status: New status
+        """
         member = self._find(name)
         if member:
             member["status"] = status
             self._save()
 
-    def _loop(self, name: str, role: str, prompt: str, provider):
-        """Main loop for teammate agent."""
-        team_name = self.config["team_name"]
+    def _execute_tool_call(self, name: str, tool_call: Any) -> str:
+        """Execute a single tool call.
+
+        Args:
+            name: Teammate name
+            tool_call: Tool call object
+
+        Returns:
+            Tool output
+        """
+        if tool_call.name == "idle":
+            return "Entering idle phase."
+        elif tool_call.name == "claim_task":
+            return self.task_mgr.claim(tool_call.input["task_id"], name)
+        elif tool_call.name == "send_message":
+            return self.bus.send(name, tool_call.input["to"], tool_call.input["content"])
+        else:
+            # File and bash tools
+            dispatch = {
+                "bash": lambda **kw: run_bash(kw["command"]),
+                "read_file": lambda **kw: read_file(kw["path"]),
+                "write_file": lambda **kw: write_file(kw["path"], kw["content"]),
+                "edit_file": lambda **kw: edit_file(kw["path"], kw["old_text"], kw["new_text"]),
+            }
+            return dispatch.get(tool_call.name, lambda **kw: "Unknown")(**tool_call.input)
+
+    def _process_inbox_messages(
+        self, name: str, inbox: List[Dict], messages: List[Dict]
+    ) -> bool:
+        """Process inbox messages and check for shutdown.
+
+        Args:
+            name: Teammate name
+            inbox: List of inbox messages
+            messages: Message list to append to
+
+        Returns:
+            True if shutdown was requested, False otherwise
+        """
+        for msg in inbox:
+            if msg.get("type") == "shutdown_request":
+                self._set_status(name, "shutdown")
+                return True
+            messages.append({"role": "user", "content": json.dumps(msg)})
+        return False
+
+    def _work_phase(
+        self, name: str, role: str, team_name: str, messages: List[Dict], tools: List[Dict], provider
+    ) -> bool:
+        """Execute work phase with multiple iterations.
+
+        Args:
+            name: Teammate name
+            role: Teammate role
+            team_name: Team name
+            messages: Message history
+            tools: Available tools
+            provider: AI provider
+
+        Returns:
+            True if idle was requested, False otherwise
+        """
         sys_prompt = (
             f"You are '{name}', role: {role}, team: {team_name}, at {self.settings.workdir}. "
             f"Use idle when done with current work. You may auto-claim tasks."
         )
+
+        for _ in range(50):
+            # Check inbox
+            inbox = self.bus.read_inbox(name)
+            if self._process_inbox_messages(name, inbox, messages):
+                return True  # Shutdown requested
+
+            # Generate response
+            try:
+                response = provider.create_message(
+                    messages=messages, tools=tools, system=sys_prompt, max_tokens=8000
+                )
+            except Exception:
+                self._set_status(name, "shutdown")
+                return True
+
+            messages.append({"role": "assistant", "content": response.content})
+            if response.stop_reason != "tool_use":
+                break
+
+            # Execute tools
+            results = []
+            idle_requested = False
+            for tc in response.tool_calls:
+                if tc.name == "idle":
+                    idle_requested = True
+                output = self._execute_tool_call(name, tc)
+                print(f"  [{name}] {tc.name}: {str(output)[:120]}")
+                results.append({"type": "tool_result", "tool_use_id": tc.id, "content": str(output)})
+
+            messages.append({"role": "user", "content": results})
+            if idle_requested:
+                return True
+
+        return False
+
+    def _check_unclaimed_tasks(self, name: str) -> Any:
+        """Check for unclaimed tasks and claim one.
+
+        Args:
+            name: Teammate name
+
+        Returns:
+            Task dict if claimed, None otherwise
+        """
+        unclaimed = []
+        for f in sorted(self.settings.tasks_dir.glob("task_*.json")):
+            t = json.loads(f.read_text())
+            if t.get("status") == "pending" and not t.get("owner") and not t.get("blockedBy"):
+                unclaimed.append(t)
+
+        if unclaimed:
+            task = unclaimed[0]
+            self.task_mgr.claim(task["id"], name)
+            return task
+        return None
+
+    def _add_task_to_messages(
+        self, task: Dict, name: str, role: str, team_name: str, messages: List[Dict]
+    ):
+        """Add claimed task to message history.
+
+        Args:
+            task: Task dict
+            name: Teammate name
+            role: Teammate role
+            team_name: Team name
+            messages: Message list to modify
+        """
+        if len(messages) <= 3:
+            messages.insert(
+                0,
+                {
+                    "role": "user",
+                    "content": f"<identity>You are '{name}', role: {role}, team: {team_name}.</identity>",
+                },
+            )
+            messages.insert(1, {"role": "assistant", "content": f"I am {name}. Continuing."})
+
+        messages.append(
+            {
+                "role": "user",
+                "content": f"<auto-claimed>Task #{task['id']}: {task['subject']}\n{task.get('description', '')}</auto-claimed>",
+            }
+        )
+        messages.append(
+            {"role": "assistant", "content": f"Claimed task #{task['id']}. Working on it."}
+        )
+
+    def _idle_phase(
+        self, name: str, role: str, team_name: str, messages: List[Dict]
+    ) -> bool:
+        """Execute idle phase, checking for messages and tasks.
+
+        Args:
+            name: Teammate name
+            role: Teammate role
+            team_name: Team name
+            messages: Message history
+
+        Returns:
+            True if should resume work, False if should shutdown
+        """
+        self._set_status(name, "idle")
+        max_iterations = self.settings.idle_timeout // max(self.settings.poll_interval, 1)
+
+        for _ in range(max_iterations):
+            time.sleep(self.settings.poll_interval)
+
+            # Check inbox
+            inbox = self.bus.read_inbox(name)
+            if inbox:
+                if self._process_inbox_messages(name, inbox, messages):
+                    return False  # Shutdown requested
+                return True  # Resume work
+
+            # Check for unclaimed tasks
+            task = self._check_unclaimed_tasks(name)
+            if task:
+                self._add_task_to_messages(task, name, role, team_name, messages)
+                return True  # Resume work
+
+        # No activity, shutdown
+        return False
+
+    def _loop(self, name: str, role: str, prompt: str, provider):
+        """Main loop for teammate agent.
+
+        Args:
+            name: Teammate name
+            role: Teammate role
+            prompt: Initial prompt
+            provider: AI provider
+        """
+        from simple_agent.tools.tool_definitions import get_teammate_tools
+
+        team_name = self.config["team_name"]
         messages = [{"role": "user", "content": prompt}]
-        tools = [
-            {
-                "name": "bash",
-                "description": "Run command.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {"command": {"type": "string"}},
-                    "required": ["command"],
-                },
-            },
-            {
-                "name": "read_file",
-                "description": "Read file.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {"path": {"type": "string"}},
-                    "required": ["path"],
-                },
-            },
-            {
-                "name": "write_file",
-                "description": "Write file.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {"path": {"type": "string"}, "content": {"type": "string"}},
-                    "required": ["path", "content"],
-                },
-            },
-            {
-                "name": "edit_file",
-                "description": "Edit file.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "path": {"type": "string"},
-                        "old_text": {"type": "string"},
-                        "new_text": {"type": "string"},
-                    },
-                    "required": ["path", "old_text", "new_text"],
-                },
-            },
-            {
-                "name": "send_message",
-                "description": "Send message.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {"to": {"type": "string"}, "content": {"type": "string"}},
-                    "required": ["to", "content"],
-                },
-            },
-            {
-                "name": "idle",
-                "description": "Signal no more work.",
-                "input_schema": {"type": "object", "properties": {}},
-            },
-            {
-                "name": "claim_task",
-                "description": "Claim task by ID.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {"task_id": {"type": "integer"}},
-                    "required": ["task_id"],
-                },
-            },
-        ]
+        tools = get_teammate_tools()
 
         while True:
-            # -- WORK PHASE --
-            for _ in range(50):
-                inbox = self.bus.read_inbox(name)
-                for msg in inbox:
-                    if msg.get("type") == "shutdown_request":
-                        self._set_status(name, "shutdown")
-                        return
-                    messages.append({"role": "user", "content": json.dumps(msg)})
-                try:
-                    response = provider.create_message(
-                        messages=messages,
-                        tools=tools,
-                        system=sys_prompt,
-                        max_tokens=8000,
-                    )
-                except Exception:
-                    self._set_status(name, "shutdown")
-                    return
+            # Work phase
+            should_idle = self._work_phase(name, role, team_name, messages, tools, provider)
+            if not should_idle:
+                # Work phase requested shutdown
+                return
 
-                messages.append({"role": "assistant", "content": response.content})
-                if response.stop_reason != "tool_use":
-                    break
-
-                results = []
-                idle_requested = False
-                for tc in response.tool_calls:
-                    if tc.name == "idle":
-                        idle_requested = True
-                        output = "Entering idle phase."
-                    elif tc.name == "claim_task":
-                        output = self.task_mgr.claim(tc.input["task_id"], name)
-                    elif tc.name == "send_message":
-                        output = self.bus.send(name, tc.input["to"], tc.input["content"])
-                    else:
-                        dispatch = {
-                            "bash": lambda **kw: run_bash(kw["command"]),
-                            "read_file": lambda **kw: read_file(kw["path"]),
-                            "write_file": lambda **kw: write_file(kw["path"], kw["content"]),
-                            "edit_file": lambda **kw: edit_file(
-                                kw["path"], kw["old_text"], kw["new_text"]
-                            ),
-                        }
-                        output = dispatch.get(tc.name, lambda **kw: "Unknown")(**tc.input)
-                    print(f"  [{name}] {tc.name}: {str(output)[:120]}")
-                    results.append(
-                        {"type": "tool_result", "tool_use_id": tc.id, "content": str(output)}
-                    )
-                messages.append({"role": "user", "content": results})
-                if idle_requested:
-                    break
-
-            # -- IDLE PHASE --
-            self._set_status(name, "idle")
-            resume = False
-            for _ in range(self.settings.idle_timeout // max(self.settings.poll_interval, 1)):
-                time.sleep(self.settings.poll_interval)
-                inbox = self.bus.read_inbox(name)
-                if inbox:
-                    for msg in inbox:
-                        if msg.get("type") == "shutdown_request":
-                            self._set_status(name, "shutdown")
-                            return
-                        messages.append({"role": "user", "content": json.dumps(msg)})
-                    resume = True
-                    break
-                unclaimed = []
-                for f in sorted(self.settings.tasks_dir.glob("task_*.json")):
-                    t = json.loads(f.read_text())
-                    if (
-                        t.get("status") == "pending"
-                        and not t.get("owner")
-                        and not t.get("blockedBy")
-                    ):
-                        unclaimed.append(t)
-                if unclaimed:
-                    task = unclaimed[0]
-                    self.task_mgr.claim(task["id"], name)
-                    if len(messages) <= 3:
-                        messages.insert(
-                            0,
-                            {
-                                "role": "user",
-                                "content": f"<identity>You are '{name}', role: {role}, team: {team_name}.</identity>",
-                            },
-                        )
-                        messages.insert(
-                            1, {"role": "assistant", "content": f"I am {name}. Continuing."}
-                        )
-                    messages.append(
-                        {
-                            "role": "user",
-                            "content": f"<auto-claimed>Task #{task['id']}: {task['subject']}\n{task.get('description', '')}</auto-claimed>",
-                        }
-                    )
-                    messages.append(
-                        {
-                            "role": "assistant",
-                            "content": f"Claimed task #{task['id']}. Working on it.",
-                        }
-                    )
-                    resume = True
-                    break
-            if not resume:
+            # Idle phase
+            should_resume = self._idle_phase(name, role, team_name, messages)
+            if not should_resume:
                 self._set_status(name, "shutdown")
                 return
+
+            # Resume working
             self._set_status(name, "working")
 
     def list_all(self) -> str:
-        """List all teammates."""
+        """List all teammates.
+
+        Returns:
+            Formatted list of teammates
+        """
         if not self.config["members"]:
             return "No teammates."
         lines = [f"Team: {self.config['team_name']}"]
@@ -296,5 +378,9 @@ class TeammateManager:
         return "\n".join(lines)
 
     def member_names(self) -> list:
-        """Get list of member names."""
+        """Get list of member names.
+
+        Returns:
+            List of member names
+        """
         return [m["name"] for m in self.config["members"]]

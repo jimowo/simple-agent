@@ -3,14 +3,20 @@
 import re
 from pathlib import Path
 
-from simple_agent.models.config import Settings
+from simple_agent.managers.base import BaseManager
 
 
-class SkillLoader:
+class SkillLoader(BaseManager):
     """Loader for skill files."""
 
-    def __init__(self, skills_dir: Path = None, settings: Settings = None):
-        self.settings = settings or Settings()
+    def __init__(self, skills_dir: Path = None, settings=None):
+        """Initialize the skill loader.
+
+        Args:
+            skills_dir: Optional path to skills directory
+            settings: Optional Settings instance
+        """
+        super().__init__(settings)
         self.skills_dir = skills_dir or self.settings.skills_dir
         self.skills = {}
         self._load_skills()

@@ -164,8 +164,3 @@ class GeminiProvider(BaseProvider):
             stop_reason=stop_reason,
             usage=usage,
         )
-
-    @staticmethod
-    def count_tokens(text: str) -> int:
-        """Approximate token count for Gemini."""
-        return len(text) // 4

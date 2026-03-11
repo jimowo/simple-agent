@@ -74,8 +74,3 @@ class AnthropicProvider(BaseProvider):
             stop_reason=response.stop_reason,
             usage=usage,
         )
-
-    @staticmethod
-    def count_tokens(text: str) -> int:
-        """Approximate token count for Anthropic (rough estimate: 1 token ~ 4 chars)."""
-        return len(text) // 4

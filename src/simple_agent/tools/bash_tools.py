@@ -1,9 +1,10 @@
 """Bash command execution tool."""
 
-import locale
 import subprocess
 from pathlib import Path
 
+from simple_agent.utils.constants import MAX_BASH_OUTPUT
+from simple_agent.utils.encoding import decode_output, get_system_encoding
 from simple_agent.utils.safety import is_dangerous_command
 
 
@@ -25,11 +26,8 @@ def run_bash(command: str, workdir: Path = None, timeout: int = 120) -> str:
     if is_dangerous_command(command):
         return "Error: Dangerous command blocked"
 
-    # Detect system encoding for better output handling
-    try:
-        system_encoding = locale.getpreferredencoding(False) or 'utf-8'
-    except Exception:
-        system_encoding = 'utf-8'
+    # Use system encoding from utils.encoding
+    system_encoding = get_system_encoding()
 
     # Try with detected/system encoding first
     try:
@@ -40,11 +38,11 @@ def run_bash(command: str, workdir: Path = None, timeout: int = 120) -> str:
             capture_output=True,
             text=True,
             encoding=system_encoding,
-            errors='replace',  # Replace characters that can't be decoded
+            errors="replace",  # Replace characters that can't be decoded
             timeout=timeout,
         )
         out = (r.stdout + r.stderr).strip()
-        return out[:50000] if out else "(no output)"
+        return out[:MAX_BASH_OUTPUT] if out else "(no output)"
     except (LookupError, UnicodeDecodeError):
         # Fallback to UTF-8 if system encoding fails
         try:
@@ -54,12 +52,12 @@ def run_bash(command: str, workdir: Path = None, timeout: int = 120) -> str:
                 cwd=workdir,
                 capture_output=True,
                 text=True,
-                encoding='utf-8',
-                errors='replace',
+                encoding="utf-8",
+                errors="replace",
                 timeout=timeout,
             )
             out = (r.stdout + r.stderr).strip()
-            return out[:50000] if out else "(no output)"
+            return out[:MAX_BASH_OUTPUT] if out else "(no output)"
         except Exception:
             # Last resort: try without encoding specification
             try:
@@ -70,18 +68,12 @@ def run_bash(command: str, workdir: Path = None, timeout: int = 120) -> str:
                     capture_output=True,
                     timeout=timeout,
                 )
-                # Decode with multiple fallback encodings
+                # Use decode_output utility for multiple encoding fallbacks
                 output = r.stdout + r.stderr
-                for encoding in ['utf-8', 'gbk', 'cp936', 'latin1']:
-                    try:
-                        out = output.decode(encoding)
-                        return out.strip()[:50000] if out.strip() else "(no output)"
-                    except (UnicodeDecodeError, LookupError):
-                        continue
-                # If all encodings fail, return raw bytes hint
-                return f"Error: Unable to decode command output ({len(output)} bytes)"
-            except Exception as e2:
-                return f"Error: {e2}"
+                out = decode_output(output)
+                return out.strip()[:MAX_BASH_OUTPUT] if out.strip() else "(no output)"
+            except Exception as e:
+                return f"Error: {e}"
     except subprocess.TimeoutExpired:
         return f"Error: Timeout ({timeout}s)"
     except Exception as e:

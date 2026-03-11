@@ -8,6 +8,7 @@ running sub-agents with isolated tool access.
 from typing import Any, Callable, Dict, List
 
 from simple_agent.providers.base import BaseProvider
+from simple_agent.utils.constants import MAX_TOOL_OUTPUT, LoopIterations
 
 
 class SubAgentRunner:
@@ -47,7 +48,7 @@ class SubAgentRunner:
         handlers = self._build_handlers()
         messages = [{"role": "user", "content": prompt}]
 
-        for _ in range(30):
+        for _ in range(LoopIterations.MAX_SUBAGENT_ITERATIONS):
             resp = self._provider.create_message(
                 messages=messages, tools=tools, max_tokens=8000
             )
@@ -70,59 +71,9 @@ class SubAgentRunner:
         Returns:
             List of tool definitions
         """
-        base_tools = [
-            {
-                "name": "bash",
-                "description": "Run command.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {"command": {"type": "string"}},
-                    "required": ["command"],
-                },
-            },
-            {
-                "name": "read_file",
-                "description": "Read file.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {"path": {"type": "string"}},
-                    "required": ["path"],
-                },
-            },
-        ]
+        from simple_agent.tools.tool_definitions import get_subagent_tools
 
-        if agent_type != "Explore":
-            base_tools.extend(
-                [
-                    {
-                        "name": "write_file",
-                        "description": "Write file.",
-                        "input_schema": {
-                            "type": "object",
-                            "properties": {
-                                "path": {"type": "string"},
-                                "content": {"type": "string"},
-                            },
-                            "required": ["path", "content"],
-                        },
-                    },
-                    {
-                        "name": "edit_file",
-                        "description": "Edit file.",
-                        "input_schema": {
-                            "type": "object",
-                            "properties": {
-                                "path": {"type": "string"},
-                                "old_text": {"type": "string"},
-                                "new_text": {"type": "string"},
-                            },
-                            "required": ["path", "old_text", "new_text"],
-                        },
-                    },
-                ]
-            )
-
-        return base_tools
+        return get_subagent_tools(agent_type)
 
     def _build_handlers(self) -> Dict[str, Callable]:
         """Build tool handlers for sub-agent.
@@ -161,7 +112,7 @@ class SubAgentRunner:
                 {
                     "type": "tool_result",
                     "tool_use_id": tc.id,
-                    "content": str(h(**tc.input))[:50000],
+                    "content": str(h(**tc.input))[:MAX_TOOL_OUTPUT],
                 }
             )
         return results
