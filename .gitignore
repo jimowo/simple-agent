@@ -21,3 +21,6 @@ wheels/
 .ruff_cache
 
 FEATURE_ROADMAP.md
+
+# Test
+.pytest_cache

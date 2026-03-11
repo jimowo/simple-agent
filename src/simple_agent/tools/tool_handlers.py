@@ -1,6 +1,6 @@
 """Tool handlers and tool definitions for the agent."""
 
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict
 
 from simple_agent.models.config import Settings
 from simple_agent.tools.base import ToolRegistry
@@ -435,7 +435,7 @@ def get_permission_aware_handlers(handlers: Dict[str, Callable] = None) -> Dict[
         return handlers
 
     # Import permission wrapper
-    from simple_agent.permissions.wrapper import wrap_with_permission, PermissionDeniedError
+    from simple_agent.permissions.wrapper import PermissionDeniedError, wrap_with_permission
 
     # Tools that require permission checking
     PERMISSION_TOOLS = {

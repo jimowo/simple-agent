@@ -4,10 +4,9 @@ This module provides wrapper functions to add permission checking to tool handle
 following SOLID principles for clean separation of concerns.
 """
 
-from typing import Any, Callable, Dict
+from typing import Callable
 
 from simple_agent.permissions.manager import PermissionManager
-from simple_agent.permissions.models import PermissionResponse
 
 
 class PermissionDeniedError(Exception):

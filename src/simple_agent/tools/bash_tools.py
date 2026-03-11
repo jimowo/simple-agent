@@ -60,7 +60,7 @@ def run_bash(command: str, workdir: Path = None, timeout: int = 120) -> str:
             )
             out = (r.stdout + r.stderr).strip()
             return out[:50000] if out else "(no output)"
-        except Exception as e:
+        except Exception:
             # Last resort: try without encoding specification
             try:
                 r = subprocess.run(

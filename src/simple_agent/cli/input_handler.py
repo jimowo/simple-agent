@@ -6,7 +6,6 @@ This module provides an enhanced input experience with:
 - Persistent history across sessions
 """
 
-import os
 from pathlib import Path
 from typing import List, Optional
 
@@ -15,7 +14,6 @@ from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.key_binding.bindings.focus import focus_next, focus_previous
 from prompt_toolkit.keys import Keys
 
 
@@ -43,7 +41,6 @@ class CommandCompleter(Completer):
         Yields:
             Completion suggestions
         """
-        word_before_cursor = document.get_word_before_cursor(Word())
         text = document.text_before_cursor
 
         # If input is empty, show all commands
