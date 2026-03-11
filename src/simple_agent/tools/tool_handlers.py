@@ -438,7 +438,7 @@ def get_permission_aware_handlers(handlers: Dict[str, Callable] = None) -> Dict[
     from simple_agent.permissions.wrapper import PermissionDeniedError, wrap_with_permission
 
     # Tools that require permission checking
-    PERMISSION_TOOLS = {
+    permission_tools = {
         "write_file": "high",
         "bash": "medium",
         "edit_file": "medium",
@@ -446,7 +446,7 @@ def get_permission_aware_handlers(handlers: Dict[str, Callable] = None) -> Dict[
 
     # Wrap handlers that require permission
     result = handlers.copy()
-    for tool, risk_level in PERMISSION_TOOLS.items():
+    for tool, risk_level in permission_tools.items():
         if tool in result:
             original_handler = result[tool]
 
