@@ -203,7 +203,11 @@ class Agent:
         This sets up the global tool handler state for backward compatibility.
         Future versions should use dependency injection instead.
         """
+        from simple_agent.permissions import PermissionManager
         from simple_agent.tools.tool_handlers import initialize_handlers
+
+        # Create permission manager
+        permission_manager = PermissionManager()
 
         initialize_handlers(
             self._ctx.todo,
@@ -214,7 +218,11 @@ class Agent:
             self._ctx.skill_loader,
             self._ctx.provider,
             self._ctx.settings,
+            permission_manager=permission_manager,
         )
+
+        # Store permission manager for access
+        self._permission_manager = permission_manager
 
     @property
     def settings(self) -> Settings:
@@ -296,6 +304,15 @@ class Agent:
             BaseProvider instance
         """
         return self._ctx.provider
+
+    @property
+    def permission_manager(self):
+        """Get permission manager.
+
+        Returns:
+            PermissionManager instance
+        """
+        return self._permission_manager
 
     def process_query(self, query: str, history: Optional[list] = None) -> str:
         """Process a user query.

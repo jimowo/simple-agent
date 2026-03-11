@@ -137,6 +137,11 @@ class AgentLoop:
             response: Provider response with tool calls
             messages: Message history list (modified in-place)
         """
+        from simple_agent.tools.tool_handlers import get_permission_aware_handlers
+
+        # Get permission-aware handlers
+        handlers = get_permission_aware_handlers(TOOL_HANDLERS)
+
         results = []
         used_todo = False
         manual_compress = False
@@ -145,7 +150,7 @@ class AgentLoop:
             if tc.name == "compress":
                 manual_compress = True
 
-            handler = TOOL_HANDLERS.get(tc.name)
+            handler = handlers.get(tc.name)
             try:
                 output = handler(**tc.input) if handler else f"Unknown tool: {tc.name}"
             except Exception as e:

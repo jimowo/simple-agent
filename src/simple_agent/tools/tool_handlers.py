@@ -1,6 +1,6 @@
 """Tool handlers and tool definitions for the agent."""
 
-from typing import Callable, Dict
+from typing import Callable, Dict, Optional
 
 from simple_agent.models.config import Settings
 from simple_agent.tools.base import ToolRegistry
@@ -19,6 +19,7 @@ _teammate_manager = None
 _skill_loader = None
 _provider = None
 _settings: Settings = None
+_permission_manager = None
 
 
 def initialize_handlers(
@@ -30,11 +31,12 @@ def initialize_handlers(
     skill_loader,
     provider,
     settings,
+    permission_manager=None,
 ):
     """Initialize handlers with manager instances."""
     global _todo_manager, _task_manager, _background_manager
     global _message_bus, _teammate_manager, _skill_loader
-    global _provider, _settings
+    global _provider, _settings, _permission_manager
 
     _todo_manager = todo_manager
     _task_manager = task_manager
@@ -44,6 +46,7 @@ def initialize_handlers(
     _skill_loader = skill_loader
     _provider = provider
     _settings = settings
+    _permission_manager = permission_manager
 
 
 # Tool handler functions
@@ -408,3 +411,56 @@ TOOLS = [
         },
     },
 ]
+
+
+# Permission-aware tool handlers
+def get_permission_aware_handlers(handlers: Dict[str, Callable] = None) -> Dict[str, Callable]:
+    """Get tool handlers with permission checking.
+
+    This function wraps handlers that require permission with permission checks.
+    It follows the Single Responsibility Principle (SRP) by only handling
+    the wrapping logic, delegating permission logic to PermissionManager.
+
+    Args:
+        handlers: Optional base handlers dict (defaults to TOOL_HANDLERS)
+
+    Returns:
+        Dictionary of tool names to wrapped handler functions
+    """
+    if handlers is None:
+        handlers = TOOL_HANDLERS.copy()
+
+    # If no permission manager, return original handlers
+    if _permission_manager is None:
+        return handlers
+
+    # Import permission wrapper
+    from simple_agent.permissions.wrapper import wrap_with_permission, PermissionDeniedError
+
+    # Tools that require permission checking
+    PERMISSION_TOOLS = {
+        "write_file": "high",
+        "bash": "medium",
+        "edit_file": "medium",
+    }
+
+    # Wrap handlers that require permission
+    result = handlers.copy()
+    for tool, risk_level in PERMISSION_TOOLS.items():
+        if tool in result:
+            original_handler = result[tool]
+
+            def create_wrapped(handler, tool_name=tool, risk=risk_level):
+                def wrapped(**kwargs):
+                    try:
+                        return wrap_with_permission(
+                            tool_name, handler, _permission_manager, risk
+                        )(**kwargs)
+                    except PermissionDeniedError as e:
+                        return f"Permission denied: {e.reason}"
+
+                return wrapped
+
+            result[tool] = create_wrapped(original_handler)
+
+    return result
