@@ -227,17 +227,44 @@ class PermissionManager:
         Returns:
             Permission response
         """
-        print(f"\n⚠️  Permission required: {request.reason}")
-        print(f"   Tool: {request.tool}")
-        print(f"   Risk: {request.risk_level}")
+        # Try to use Rich for better display (handles encoding better)
+        try:
+            from rich.console import Console
+            from rich.panel import Panel
+            from rich.text import Text
 
-        if request.params:
-            print(f"   Parameters: {request._format_params()}")
+            console = Console()
 
+            # Build permission request panel
+            panel_content = Text()
+            panel_content.append("Permission Required\n", style="bold yellow")
+            panel_content.append(f"Reason: {request.reason}\n", style="default")
+            panel_content.append(f"Tool: {request.tool}\n", style="cyan")
+            panel_content.append(f"Risk: {request.risk_level}\n", style="red")
+
+            if request.params:
+                panel_content.append(f"Parameters: {request._format_params()}\n", style="dim")
+
+            console.print(Panel(panel_content, title="[yellow]⚠️[/yellow]", border_style="yellow"))
+
+        except Exception:
+            # Fallback to simple print (may have encoding issues)
+            try:
+                print(f"\n[PERMISSION] {request.reason}")
+                print(f"  Tool: {request.tool}")
+                print(f"  Risk: {request.risk_level}")
+            except Exception:
+                print(f"\n[PERMISSION] Tool: {request.tool} Risk: {request.risk_level}")
+
+        # Get user response
         while True:
-            response = input(
-                "Allow? [Y/n/a(llow for session)/d(eny for session)/s(kip once)]: "
-            ).strip().lower()
+            try:
+                response = input(
+                    "Allow? [Y/n/a(llow for session)/d(eny for session)/s(kip once)]: "
+                ).strip().lower()
+            except Exception:
+                # Fallback for encoding issues
+                response = input("Allow? [Y/n/a/d/s]: ").strip().lower()
 
             if response in ("y", "yes", ""):
                 return PermissionResponse(allowed=True)
