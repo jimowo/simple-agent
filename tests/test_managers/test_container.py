@@ -8,6 +8,7 @@ from simple_agent.core.container import (
     get_container,
     reset_container,
 )
+from simple_agent.exceptions import ServiceNotFoundError
 
 
 class SimpleService:
@@ -103,7 +104,7 @@ class TestServiceContainer:
         """Test that resolving unregistered service raises error."""
         container = ServiceContainer()
 
-        with pytest.raises(ValueError, match="not registered"):
+        with pytest.raises(ServiceNotFoundError, match="not registered"):
             container.resolve(SimpleService)
 
     def test_resolve_unregistered_shows_available(self):
@@ -113,7 +114,7 @@ class TestServiceContainer:
         container.register_singleton(SimpleService, lambda c: SimpleService())
         container.register_singleton(AnotherService, lambda c: AnotherService())
 
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(ServiceNotFoundError) as exc_info:
             class UnregisteredService:
                 pass
             container.resolve(UnregisteredService)

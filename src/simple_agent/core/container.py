@@ -8,6 +8,8 @@ between components and facilitates testing.
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional, Type, TypeVar
 
+from simple_agent.exceptions import ServiceNotFoundError
+
 T = TypeVar("T")
 
 
@@ -92,14 +94,12 @@ class ServiceContainer:
             The service instance
 
         Raises:
-            ValueError: If the service is not registered
+            ServiceNotFoundError: If the service is not registered
         """
         name = self._get_service_name(interface)
         if name not in self._services:
-            available = ", ".join(sorted(self._services.keys()))
-            raise ValueError(
-                f"Service '{name}' not registered. Available services: {available}"
-            )
+            available = list(self._services.keys())
+            raise ServiceNotFoundError(name, available)
 
         descriptor = self._services[name]
 

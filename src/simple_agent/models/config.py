@@ -9,6 +9,11 @@ import os
 from pathlib import Path
 from typing import Dict, Optional
 
+from pydantic import BaseModel, Field
+from pydantic_settings import BaseSettings
+
+from simple_agent.exceptions import InvalidProviderError
+
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
@@ -149,10 +154,8 @@ class ProviderConfigFactory:
 
         # Validate provider name
         if provider_name not in cls.DEFAULT_MODELS:
-            raise ValueError(
-                f"Unknown provider: {provider_name}. "
-                f"Available: {list(cls.DEFAULT_MODELS.keys())}"
-            )
+            available = list(cls.DEFAULT_MODELS.keys())
+            raise InvalidProviderError(provider_name, available)
 
         # Create default configuration
         config = ProviderConfig()

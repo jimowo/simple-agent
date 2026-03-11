@@ -9,6 +9,7 @@ This module tests security-critical functionality including:
 import pytest
 from pathlib import Path
 
+from simple_agent.exceptions import PathTraversalError
 from simple_agent.utils.safety import (
     is_dangerous_command,
     safe_path,
@@ -164,7 +165,7 @@ class TestSafePath:
         ]
 
         for attempt in traversal_attempts:
-            with pytest.raises(ValueError, match="escapes workspace"):
+            with pytest.raises(PathTraversalError, match="escapes workspace"):
                 safe_path(attempt, temp_workspace)
 
     def test_tilde_expansion(self, temp_workspace):
@@ -176,7 +177,7 @@ class TestSafePath:
         home = Path.home()
         # Only test if home is actually different from temp workspace
         if home != temp_workspace and not str(temp_workspace).startswith(str(home)):
-            with pytest.raises(ValueError, match="escapes workspace"):
+            with pytest.raises(PathTraversalError, match="escapes workspace"):
                 safe_path("~/.bashrc", temp_workspace)
 
     def test_nested_directory_creation(self, temp_workspace):
@@ -282,6 +283,6 @@ class TestEdgeCases:
                 result = safe_path(path, temp_workspace)
                 # If it succeeds, check it's a Path object
                 assert isinstance(result, Path)
-            except (ValueError, RuntimeError):
+            except (ValueError, RuntimeError, PathTraversalError):
                 # Also acceptable to raise an error
                 pass

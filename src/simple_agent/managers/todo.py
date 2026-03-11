@@ -2,6 +2,7 @@
 
 from typing import List
 
+from simple_agent.exceptions import TodoLimitError, TaskValidationError
 from simple_agent.models.tasks import TodoItem
 from simple_agent.utils.logger import LoggerMixin
 
@@ -39,10 +40,10 @@ class TodoManager(LoggerMixin):
 
         if len(validated) > 20:
             self.logger.error("Too many todo items: {}", len(validated))
-            raise ValueError("Max 20 todos")
+            raise TodoLimitError(len(validated), 20)
         if ip > 1:
             self.logger.error("Multiple in_progress items: {}", ip)
-            raise ValueError("Only one in_progress allowed")
+            raise TaskValidationError("Only one in_progress allowed", field="status")
 
         self.items = validated
         self.logger.info("Updated todos: {} items", len(validated))

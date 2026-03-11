@@ -11,6 +11,7 @@ import shlex
 from pathlib import Path
 from typing import List, Pattern, Set
 
+from simple_agent.exceptions import PathTraversalError, CommandInjectionError
 from simple_agent.models.config import Settings
 
 
@@ -222,10 +223,7 @@ def safe_path(p: str, workdir: Path = None) -> Path:
 
         # Check if path is within workspace
         if not path.is_relative_to(workdir_resolved):
-            raise ValueError(
-                f"Path escapes workspace: '{p}' resolves to '{path}', "
-                f"which is outside workspace '{workdir_resolved}'"
-            )
+            raise PathTraversalError(str(p), str(workdir_resolved))
 
         # Additional safety check: detect parent directory references in original path
         path_obj = Path(p)
@@ -237,7 +235,7 @@ def safe_path(p: str, workdir: Path = None) -> Path:
         return path
 
     except (ValueError, RuntimeError) as e:
-        raise ValueError(f"Invalid path '{p}': {e}") from e
+        raise PathTraversalError(str(p), f"Invalid path: {e}") from e
 
 
 # Legacy constants for backward compatibility

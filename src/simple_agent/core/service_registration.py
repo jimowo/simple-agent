@@ -7,6 +7,7 @@ with the container, following the Dependency Inversion Principle (DIP).
 from typing import Any, Dict
 
 from simple_agent.core.container import ServiceContainer
+from simple_agent.exceptions import MissingApiKeyError
 from simple_agent.models.config import Settings
 from simple_agent.providers.base import BaseProvider
 
@@ -121,10 +122,7 @@ def _create_provider(settings: Settings) -> BaseProvider:
             api_key = os.getenv(env_key)
 
     if not api_key and provider_name != "local":
-        raise ValueError(
-            f"API key not found for provider '{provider_name}'. "
-            f"Set {env_key}_API_KEY environment variable."
-        )
+        raise MissingApiKeyError(provider_name)
 
     return ProviderFactory.create(
         provider_name=provider_name,
