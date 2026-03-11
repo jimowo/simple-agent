@@ -1,5 +1,6 @@
 """Groq provider implementation (fast inference)."""
 
+import json
 from typing import Any, Dict, List, Optional
 
 from groq import Groq
@@ -97,7 +98,7 @@ class GroqProvider(BaseProvider):
                     ToolCall(
                         id=tc.id,
                         name=tc.function.name,
-                        input=eval(tc.function.arguments),
+                        input=json.loads(tc.function.arguments),
                     )
                 )
 

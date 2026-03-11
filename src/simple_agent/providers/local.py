@@ -1,5 +1,6 @@
 """Local model provider implementation (Ollama, vLLM)."""
 
+import json
 from typing import Any, Dict, List, Optional
 
 from openai import OpenAI
@@ -120,7 +121,7 @@ class LocalProvider(BaseProvider):
                     ToolCall(
                         id=tc.id,
                         name=tc.function.name,
-                        input=eval(tc.function.arguments),
+                        input=json.loads(tc.function.arguments),
                     )
                 )
 

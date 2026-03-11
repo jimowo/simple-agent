@@ -1,5 +1,6 @@
 """OpenAI provider implementation."""
 
+import json
 from typing import Any, Dict, List, Optional
 
 from openai import OpenAI
@@ -98,7 +99,7 @@ class OpenAIProvider(BaseProvider):
                     ToolCall(
                         id=tc.id,
                         name=tc.function.name,
-                        input=eval(tc.function.arguments),  # OpenAI returns JSON string
+                        input=json.loads(tc.function.arguments),  # OpenAI returns JSON string
                     )
                 )
 
