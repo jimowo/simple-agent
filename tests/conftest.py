@@ -71,6 +71,7 @@ def use_temp_workspace(temp_workspace):
             skills_dir=temp_workspace / "skills",
             team_dir=temp_workspace / "team",
             transcript_dir=temp_workspace / "transcripts",
+            logs_dir=temp_workspace / "logs",
         )
 
     # Patch Settings() to return temp workspace settings

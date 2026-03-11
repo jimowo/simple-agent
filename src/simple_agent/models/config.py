@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     tasks_dir: Path = Field(default_factory=lambda: Path.cwd() / ".tasks")
     skills_dir: Path = Field(default_factory=lambda: Path.cwd() / "skills")
     transcript_dir: Path = Field(default_factory=lambda: Path.cwd() / ".transcripts")
+    logs_dir: Path = Field(default_factory=lambda: Path.cwd() / ".logs")
 
     # Provider settings
     default_provider: str = Field(default="anthropic", alias="DEFAULT_PROVIDER")

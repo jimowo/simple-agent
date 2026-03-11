@@ -3,9 +3,10 @@
 from typing import List
 
 from simple_agent.models.tasks import TodoItem
+from simple_agent.utils.logger import LoggerMixin
 
 
-class TodoManager:
+class TodoManager(LoggerMixin):
     """Manager for todo items."""
 
     def __init__(self):
@@ -21,6 +22,7 @@ class TodoManager:
         Returns:
             Rendered todo list
         """
+        self.logger.debug("Updating todo items: {}", len(items))
         validated = []
         ip = 0
         for i, item in enumerate(items):
@@ -36,11 +38,14 @@ class TodoManager:
             )
 
         if len(validated) > 20:
+            self.logger.error("Too many todo items: {}", len(validated))
             raise ValueError("Max 20 todos")
         if ip > 1:
+            self.logger.error("Multiple in_progress items: {}", ip)
             raise ValueError("Only one in_progress allowed")
 
         self.items = validated
+        self.logger.info("Updated todos: {} items", len(validated))
         return self.render()
 
     def render(self) -> str:

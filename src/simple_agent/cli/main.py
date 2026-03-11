@@ -12,6 +12,7 @@ from simple_agent.agent.loop import agent_loop
 from simple_agent.cli import InteractivePrompt
 from simple_agent.models.config import Settings, create_settings
 from simple_agent.permissions.manager import PermissionManager
+from simple_agent.utils.logger import setup_logger
 
 app = typer.Typer(
     name="simple-agent",
@@ -79,6 +80,7 @@ def main(
     workdir: Optional[str] = typer.Option(
         None, "--workdir", "-w", help="Override working directory"
     ),
+    log_level: str = typer.Option("INFO", "--log-level", help="Set logging level (DEBUG, INFO, WARNING, ERROR)"),
 ):
     """Global options for simple-agent."""
     settings_dict = {}
@@ -89,7 +91,17 @@ def main(
     if workdir:
         settings_dict["workdir"] = Path(workdir)
 
-    ctx.obj = create_settings(**settings_dict) if settings_dict else None
+    # Initialize settings
+    settings = create_settings(**settings_dict) if settings_dict else Settings()
+    ctx.obj = settings
+
+    # Setup logging
+    setup_logger(
+        log_dir=settings.logs_dir,
+        log_level=log_level,
+        enable_console=True,
+        enable_file=True,
+    )
 
 
 @app.command("chat")

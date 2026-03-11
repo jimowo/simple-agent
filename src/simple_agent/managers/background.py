@@ -6,9 +6,10 @@ import uuid
 from queue import Queue
 
 from simple_agent.models.config import Settings
+from simple_agent.utils.logger import LoggerMixin
 
 
-class BackgroundManager:
+class BackgroundManager(LoggerMixin):
     """Manager for background task execution."""
 
     def __init__(self, settings: Settings = None):
@@ -20,11 +21,13 @@ class BackgroundManager:
         """Run a command in background."""
         tid = str(uuid.uuid4())[:8]
         self.tasks[tid] = {"status": "running", "command": command, "result": None}
+        self.logger.info("Starting background task {}: {}", tid, command[:80])
         threading.Thread(target=self._exec, args=(tid, command, timeout), daemon=True).start()
         return f"Background task {tid} started: {command[:80]}"
 
     def _exec(self, tid: str, command: str, timeout: int):
         """Execute background task."""
+        self.logger.debug("Executing task {}: {}", tid, command[:60])
         try:
             r = subprocess.run(
                 command,
@@ -36,8 +39,10 @@ class BackgroundManager:
             )
             output = (r.stdout + r.stderr).strip()[:50000]
             self.tasks[tid].update({"status": "completed", "result": output or "(no output)"})
+            self.logger.success("Task {} completed: {}", tid, tid)
         except Exception as e:
             self.tasks[tid].update({"status": "error", "result": str(e)})
+            self.logger.error("Task {} failed: {}", tid, str(e))
 
         self.notifications.put(
             {
