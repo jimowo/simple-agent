@@ -93,6 +93,7 @@ class Agent:
         message_bus=None,
         teammate_manager=None,
         skill_loader=None,
+        permission_manager=None,
     ):
         """Initialize the Agent.
 
@@ -105,6 +106,7 @@ class Agent:
             message_bus: Legacy parameter for backward compatibility
             teammate_manager: Legacy parameter for backward compatibility
             skill_loader: Legacy parameter for backward compatibility
+            permission_manager: Optional pre-configured permission manager
         """
         # Use provided context or create from settings
         if context is not None:
@@ -135,6 +137,9 @@ class Agent:
             else:
                 # Modern mode: create context from settings using container
                 self._ctx = AgentContext.from_container(settings or Settings())
+
+        # Store permission manager for later use
+        self._external_permission_manager = permission_manager
 
         # Initialize tool handlers with managers from context
         self._initialize_tool_handlers()
@@ -206,8 +211,11 @@ class Agent:
         from simple_agent.permissions import PermissionManager
         from simple_agent.tools.tool_handlers import initialize_handlers
 
-        # Create permission manager
-        permission_manager = PermissionManager()
+        # Use provided permission manager or create a default one
+        if self._external_permission_manager is not None:
+            permission_manager = self._external_permission_manager
+        else:
+            permission_manager = PermissionManager()
 
         initialize_handlers(
             self._ctx.todo,

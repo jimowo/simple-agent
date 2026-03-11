@@ -6,9 +6,37 @@ This module implements the permission manager following SOLID principles:
 - Dependency Inversion Principle (DIP): Uses protocol for user interaction
 """
 
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Protocol
 
 from simple_agent.permissions.models import PermissionPolicy, PermissionRequest, PermissionResponse
+
+
+class StatusController(Protocol):
+    """Protocol for controlling status display during permission requests.
+
+    This allows the permission manager to pause/resume status displays
+    when user interaction is needed.
+    """
+
+    def pause(self) -> None:
+        """Pause the status display."""
+        ...
+
+    def resume(self) -> None:
+        """Resume the status display."""
+        ...
+
+
+class NoOpStatusController:
+    """No-op status controller for when status control is not needed."""
+
+    def pause(self) -> None:
+        """No-op pause."""
+        pass
+
+    def resume(self) -> None:
+        """No-op resume."""
+        pass
 
 
 class PermissionRule:
@@ -76,16 +104,47 @@ class PermissionManager:
         "run_command": "high",
     }
 
-    def __init__(self, user_callback: Optional[Callable[[PermissionRequest], PermissionResponse]] = None):
+    def __init__(
+        self,
+        user_callback: Optional[Callable[[PermissionRequest], PermissionResponse]] = None,
+        status_controller: Optional[StatusController] = None,
+    ):
         """Initialize the permission manager.
 
         Args:
             user_callback: Optional function to request user permission.
                 If None, uses default CLI callback.
+            status_controller: Optional controller for pausing/resuming status
+                displays during permission requests.
         """
         self.rules = self._default_rules()
         self.session_policies: Dict[str, PermissionPolicy] = {}
-        self.user_callback = user_callback or self._default_user_callback
+        self.status_controller = status_controller or NoOpStatusController()
+
+        # Wrap user callback to handle status control
+        if user_callback is None:
+            self.user_callback = self._wrap_callback_with_status_control(self._default_user_callback)
+        else:
+            self.user_callback = self._wrap_callback_with_status_control(user_callback)
+
+    def _wrap_callback_with_status_control(
+        self, callback: Callable[[PermissionRequest], PermissionResponse]
+    ) -> Callable[[PermissionRequest], PermissionResponse]:
+        """Wrap a callback to automatically pause/resume status.
+
+        Args:
+            callback: Original callback function
+
+        Returns:
+            Wrapped callback function
+        """
+        def wrapped(request: PermissionRequest) -> PermissionResponse:
+            self.status_controller.pause()
+            try:
+                return callback(request)
+            finally:
+                self.status_controller.resume()
+        return wrapped
 
     def _default_rules(self) -> List[PermissionRule]:
         """Get default permission rules.
@@ -235,6 +294,10 @@ class PermissionManager:
 
             console = Console()
 
+            # Add visual separation before panel
+            console.line()  # Add blank line
+            console.line()  # Add another blank line
+
             # Build permission request panel
             panel_content = Text()
             panel_content.append("Permission Required\n", style="bold yellow")
@@ -245,16 +308,19 @@ class PermissionManager:
             if request.params:
                 panel_content.append(f"Parameters: {request._format_params()}\n", style="dim")
 
-            console.print(Panel(panel_content, title="[yellow]⚠️[/yellow]", border_style="yellow"))
+            console.print(Panel(panel_content, title="[yellow]WARNING[/yellow]", border_style="yellow"))
+            console.line()  # Add blank line after panel
 
         except Exception:
             # Fallback to simple print (may have encoding issues)
             try:
-                print(f"\n[PERMISSION] {request.reason}")
+                print("\n")
+                print(f"[PERMISSION] {request.reason}")
                 print(f"  Tool: {request.tool}")
                 print(f"  Risk: {request.risk_level}")
             except Exception:
-                print(f"\n[PERMISSION] Tool: {request.tool} Risk: {request.risk_level}")
+                print("\n")
+                print(f"[PERMISSION] Tool: {request.tool} Risk: {request.risk_level}")
 
         # Get user response
         while True:

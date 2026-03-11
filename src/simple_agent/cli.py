@@ -10,6 +10,7 @@ from rich.markdown import Markdown
 from simple_agent.agent.base import Agent
 from simple_agent.agent.loop import agent_loop
 from simple_agent.models.config import Settings, create_settings
+from simple_agent.permissions.manager import PermissionManager
 
 app = typer.Typer(
     name="simple-agent",
@@ -19,9 +20,54 @@ app = typer.Typer(
 console = Console()
 
 
-def _get_agent(settings: Settings = None) -> Agent:
-    """Get agent instance with optional settings."""
-    return Agent(settings or Settings())
+class ConsoleStatusController:
+    """Status controller that manages Rich console.status during permission requests.
+
+    This allows the permission manager to pause/resume the status spinner
+    when user interaction is needed.
+    """
+
+    def __init__(self, console_instance: Console):
+        """Initialize the status controller.
+
+        Args:
+            console_instance: Rich Console instance
+        """
+        self._console = console_instance
+        self._status_context = None
+
+    def set_status_context(self, status_context):
+        """Set the active status context.
+
+        Args:
+            status_context: The console.status context manager
+        """
+        self._status_context = status_context
+
+    def pause(self) -> None:
+        """Pause the status display by hiding the status."""
+        if self._status_context is not None:
+            # Rich doesn't have a direct pause method, so we use console.line()
+            # to add visual separation
+            self._console.line(count=2)
+
+    def resume(self) -> None:
+        """Resume the status display (no-op for Rich status)."""
+        # Rich status automatically resumes, no action needed
+        pass
+
+
+def _get_agent(settings: Settings = None, permission_manager: PermissionManager = None) -> Agent:
+    """Get agent instance with optional settings and permission manager.
+
+    Args:
+        settings: Optional settings instance
+        permission_manager: Optional pre-configured permission manager
+
+    Returns:
+        Agent instance
+    """
+    return Agent(settings or Settings(), permission_manager=permission_manager)
 
 
 @app.callback()
@@ -51,7 +97,12 @@ def chat_command(
 ):
     """Start interactive chat mode."""
     settings = ctx.obj or Settings()
-    agent = _get_agent(settings)
+
+    # Create permission manager with status controller
+    status_controller = ConsoleStatusController(console)
+    permission_manager = PermissionManager(status_controller=status_controller)
+
+    agent = _get_agent(settings, permission_manager)
     history = []
 
     provider_name = settings.get_active_provider()
@@ -71,12 +122,16 @@ def chat_command(
 
         history.append({"role": "user", "content": query})
 
-        with console.status("[bold green]Thinking...", spinner="dots"):
-            try:
-                agent_loop(history, agent)
-            except Exception as e:
-                console.print(f"[red]Error: {e}[/red]")
-                continue
+        # Use status with explicit end to allow permission panels to display properly
+        status = console.status("[bold green]Thinking...", spinner="dots")
+        status.start()
+        try:
+            agent_loop(history, agent)
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+            status.stop()
+            continue
+        status.stop()
 
         # Display response
         for msg in reversed(history):
@@ -103,19 +158,28 @@ def run_command(
 ):
     """Run a single prompt and exit."""
     settings = ctx.obj or Settings()
-    agent = _get_agent(settings)
+
+    # Create permission manager with status controller
+    status_controller = ConsoleStatusController(console)
+    permission_manager = PermissionManager(status_controller=status_controller)
+
+    agent = _get_agent(settings, permission_manager)
 
     if verbose:
         console.print(f"[cyan]Executing:[/cyan] {prompt}\n")
 
     history = [{"role": "user", "content": prompt}]
 
-    with console.status("[bold green]Processing...", spinner="dots"):
-        try:
-            agent_loop(history, agent)
-        except Exception as e:
-            console.print(f"[red]Error: {e}[/red]")
-            raise typer.Exit(1)
+    # Use status with explicit control
+    status = console.status("[bold green]Processing...", spinner="dots")
+    status.start()
+    try:
+        agent_loop(history, agent)
+    except Exception as e:
+        status.stop()
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+    status.stop()
 
     # Display response
     for msg in reversed(history):
