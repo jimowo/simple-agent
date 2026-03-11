@@ -23,4 +23,5 @@ wheels/
 FEATURE_ROADMAP.md
 
 # Test
+.coverage
 .pytest_cache
