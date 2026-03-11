@@ -21,6 +21,7 @@ wheels/
 
 # Claude Code
 .claude
+skills-lock.json
 
 # Ruff
 .ruff_cache
