@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Callable, Dict, Optional
 
 from simple_agent.tools.bash_tools import run_bash
 from simple_agent.tools.file_tools import edit_file, read_file, write_file
+from simple_agent.tools.search_tools import glob_files, grep_content
+from simple_agent.tools.web_tools import web_fetch, web_search
 
 if TYPE_CHECKING:
     from simple_agent.agent.context import AgentContext
@@ -149,6 +151,35 @@ class ToolHandlerRegistry:
         """Handle task claiming."""
         return self._context.task_mgr.claim(task_id, "lead")
 
+    # Search tools
+    def handle_glob(self, pattern: str, path: str = None) -> str:
+        """Handle glob file pattern matching."""
+        return glob_files(pattern, path)
+
+    def handle_grep(
+        self,
+        pattern: str,
+        path: str = None,
+        file_pattern: str = None,
+        ignore_case: bool = False,
+    ) -> str:
+        """Handle grep content search."""
+        return grep_content(pattern, path, file_pattern, ignore_case)
+
+    # Web tools
+    def handle_web_fetch(self, url: str, timeout: int = 20) -> str:
+        """Handle web content fetching."""
+        return web_fetch(url, timeout)
+
+    def handle_web_search(
+        self,
+        query: str,
+        num_results: int = 10,
+        timeout: int = 10,
+    ) -> str:
+        """Handle web search."""
+        return web_search(query, num_results, timeout, self._context.settings)
+
     def get_handlers(self, tool_names: list = None) -> Dict[str, Callable]:
         """Get tool handlers as a dictionary.
 
@@ -163,12 +194,16 @@ class ToolHandlerRegistry:
             "read_file": self.handle_read_file,
             "write_file": self.handle_write_file,
             "edit_file": self.handle_edit_file,
+            "glob": self.handle_glob,
+            "grep": self.handle_grep,
             "TodoWrite": self.handle_todo_write,
             "task": self.handle_task,
             "load_skill": self.handle_load_skill,
             "compress": self.handle_compress,
             "background_run": self.handle_background_run,
             "check_background": self.handle_check_background,
+            "web_fetch": self.handle_web_fetch,
+            "web_search": self.handle_web_search,
             "task_create": self.handle_task_create,
             "task_get": self.handle_task_get,
             "task_update": self.handle_task_update,

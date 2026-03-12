@@ -7,7 +7,6 @@ running sub-agents with isolated tool access.
 
 from typing import Any, Callable, Dict, List, Optional
 
-from simple_agent.agent.context import AgentContext
 from simple_agent.providers.base import BaseProvider
 from simple_agent.tools.handler_registry import ToolHandlerRegistry
 from simple_agent.utils.constants import MAX_TOOL_OUTPUT, LoopIterations

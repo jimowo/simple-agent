@@ -92,6 +92,14 @@ class Settings(BaseSettings):
     # Bash settings
     bash_timeout: int = Field(default=120, alias="BASH_TIMEOUT")
 
+    # Search API settings
+    search_api: str = Field(default="duckduckgo", alias="SEARCH_API")
+    google_search_api_key: Optional[str] = Field(default=None, alias="GOOGLE_SEARCH_API_KEY")
+    google_search_engine_id: Optional[str] = Field(default=None, alias="GOOGLE_SEARCH_ENGINE_ID")
+    bing_search_api_key: Optional[str] = Field(default=None, alias="BING_SEARCH_API_KEY")
+    serpapi_api_key: Optional[str] = Field(default=None, alias="SERPAPI_API_KEY")
+    web_timeout: int = Field(default=20, alias="WEB_TIMEOUT")
+
     class Config:
         extra = "allow"
         env_file = ".env"

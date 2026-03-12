@@ -26,6 +26,32 @@ BASIC_TOOLS: List[Dict[str, Any]] = [
             "required": ["path"],
         },
     },
+    {
+        "name": "glob",
+        "description": "Find files by pattern matching using glob syntax (e.g., '**/*.py', 'src/**/*.txt').",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "pattern": {"type": "string"},
+                "path": {"type": "string"},
+            },
+            "required": ["pattern"],
+        },
+    },
+    {
+        "name": "grep",
+        "description": "Search for patterns in file contents using regex.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "pattern": {"type": "string"},
+                "path": {"type": "string"},
+                "file_pattern": {"type": "string"},
+                "ignore_case": {"type": "boolean"},
+            },
+            "required": ["pattern"],
+        },
+    },
 ]
 
 
@@ -114,6 +140,55 @@ TASK_TOOLS: List[Dict[str, Any]] = [
 
 # Background task tools
 BACKGROUND_TOOLS: List[Dict[str, Any]] = [
+    {
+        "name": "background_run",
+        "description": "Run command in background thread.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"command": {"type": "string"}, "timeout": {"type": "integer"}},
+            "required": ["command"],
+        },
+    },
+    {
+        "name": "check_background",
+        "description": "Check background task status.",
+        "input_schema": {"type": "object", "properties": {"task_id": {"type": "string"}}},
+    },
+]
+
+
+# Web tools (network access)
+WEB_TOOLS: List[Dict[str, Any]] = [
+    {
+        "name": "web_fetch",
+        "description": "Fetch content from a URL.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string"},
+                "timeout": {"type": "integer"},
+            },
+            "required": ["url"],
+        },
+    },
+    {
+        "name": "web_search",
+        "description": "Search the web for information.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "num_results": {"type": "integer"},
+                "timeout": {"type": "integer"},
+            },
+            "required": ["query"],
+        },
+    },
+]
+
+
+# Persistent task management tools
+PERSISTENT_TASK_TOOLS: List[Dict[str, Any]] = [
     {
         "name": "background_run",
         "description": "Run command in background thread.",
@@ -275,6 +350,7 @@ def get_all_tools() -> List[Dict[str, Any]]:
         + WRITE_TOOLS
         + TASK_TOOLS
         + BACKGROUND_TOOLS
+        + WEB_TOOLS
         + PERSISTENT_TASK_TOOLS
         + COLLABORATION_TOOLS
         + WORKFLOW_TOOLS

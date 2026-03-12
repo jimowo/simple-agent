@@ -11,6 +11,8 @@ class OutputLimits:
     MAX_BASH_OUTPUT = 50000  # Maximum characters for bash command output
     MAX_FILE_READ = 50000  # Maximum characters for file read output
     MAX_TOOL_OUTPUT = 50000  # Maximum characters for tool output
+    MAX_SEARCH_RESULTS = 100  # Maximum number of search results to return
+    MAX_WEB_CONTENT_LENGTH = 50000  # Maximum characters for web content
 
 
 class LoopIterations:
@@ -31,3 +33,5 @@ class Encoding:
 MAX_BASH_OUTPUT = OutputLimits.MAX_BASH_OUTPUT
 MAX_FILE_READ = OutputLimits.MAX_FILE_READ
 MAX_TOOL_OUTPUT = OutputLimits.MAX_TOOL_OUTPUT
+MAX_SEARCH_RESULTS = OutputLimits.MAX_SEARCH_RESULTS
+MAX_WEB_CONTENT_LENGTH = OutputLimits.MAX_WEB_CONTENT_LENGTH

@@ -118,6 +118,21 @@ def handle_edit_file(path: str, old_text: str, new_text: str) -> str:
     return _ensure_registry().handle_edit_file(path, old_text, new_text)
 
 
+def handle_glob(pattern: str, path: str = None) -> str:
+    """Handle glob file pattern matching."""
+    return _ensure_registry().handle_glob(pattern, path)
+
+
+def handle_grep(
+    pattern: str,
+    path: str = None,
+    file_pattern: str = None,
+    ignore_case: bool = False,
+) -> str:
+    """Handle grep content search."""
+    return _ensure_registry().handle_grep(pattern, path, file_pattern, ignore_case)
+
+
 def handle_todo_write(items: list) -> str:
     """Handle todo list updates."""
     return _ensure_registry().handle_todo_write(items)
@@ -146,6 +161,16 @@ def handle_background_run(command: str, timeout: int = None) -> str:
 def handle_check_background(task_id: str = None) -> str:
     """Handle background task status check."""
     return _ensure_registry().handle_check_background(task_id)
+
+
+def handle_web_fetch(url: str, timeout: int = 20) -> str:
+    """Handle web content fetching."""
+    return _ensure_registry().handle_web_fetch(url, timeout)
+
+
+def handle_web_search(query: str, num_results: int = 10, timeout: int = 10) -> str:
+    """Handle web search."""
+    return _ensure_registry().handle_web_search(query, num_results, timeout)
 
 
 def handle_task_create(subject: str, description: str = "") -> str:
@@ -221,12 +246,16 @@ TOOL_HANDLERS: Dict[str, Callable] = {
     "read_file": handle_read_file,
     "write_file": handle_write_file,
     "edit_file": handle_edit_file,
+    "glob": handle_glob,
+    "grep": handle_grep,
     "TodoWrite": handle_todo_write,
     "task": handle_task,
     "load_skill": handle_load_skill,
     "compress": handle_compress,
     "background_run": handle_background_run,
     "check_background": handle_check_background,
+    "web_fetch": handle_web_fetch,
+    "web_search": handle_web_search,
     "task_create": handle_task_create,
     "task_get": handle_task_get,
     "task_update": handle_task_update,
