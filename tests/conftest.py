@@ -31,6 +31,7 @@ def reset_global_state():
     for attr in [
         '_todo_manager', '_task_manager', '_background_manager',
         '_message_bus', '_teammate_manager', '_skill_loader',
+        '_project_manager', '_session_manager',
         '_provider', '_settings', '_permission_manager'
     ]:
         if hasattr(tool_handlers, attr):
@@ -190,6 +191,8 @@ def initialized_context(mock_settings, mock_provider, mock_permission_manager):
     from simple_agent.managers.message import MessageBus
     from simple_agent.managers.teammate import TeammateManager
     from simple_agent.managers.skill import SkillLoader
+    from simple_agent.managers.project import ProjectManager
+    from simple_agent.managers.session import SessionManager
     from simple_agent.tools.tool_handlers import initialize_handlers
 
     # Create real manager instances with test settings
@@ -199,6 +202,8 @@ def initialized_context(mock_settings, mock_provider, mock_permission_manager):
     bus = MessageBus(mock_settings)
     skill = SkillLoader(settings=mock_settings)
     teammate = TeammateManager(bus, task, mock_settings)
+    project = ProjectManager(mock_settings)
+    session = SessionManager(mock_settings)
 
     # Create context
     context = AgentContext(
@@ -209,6 +214,8 @@ def initialized_context(mock_settings, mock_provider, mock_permission_manager):
         bus=bus,
         skill_loader=skill,
         teammate=teammate,
+        project_mgr=project,
+        session_mgr=session,
         provider=mock_provider,
     )
 

@@ -4,7 +4,8 @@ These interfaces define the contracts that manager implementations must follow,
 following the Dependency Inversion Principle (DIP) of SOLID.
 """
 
-from typing import Any, Dict, List, Optional, Protocol
+from pathlib import Path
+from typing import Any, Dict, Generator, List, Optional, Protocol
 
 
 class TodoManager(Protocol):
@@ -234,5 +235,243 @@ class TeammateManager(Protocol):
 
         Returns:
             List of names
+        """
+        ...
+
+
+# Note: The following are placeholder type hints for the actual model classes
+# These are used in the Protocol definitions below to avoid circular imports
+class _ProjectMetadata(Protocol):
+    """Placeholder for ProjectMetadata model."""
+    project_id: str
+    original_path: str
+    session_count: int
+
+
+class _SessionMetadata(Protocol):
+    """Placeholder for SessionMetadata model."""
+    session_id: str
+    project_id: str
+    message_count: int
+    status: str
+
+
+class _SessionMessage(Protocol):
+    """Placeholder for SessionMessage model."""
+    role: str
+    content: str
+    timestamp: float
+
+
+class _SubagentMetadata(Protocol):
+    """Placeholder for SubagentMetadata model."""
+    agent_id: str
+    session_id: str
+    agent_type: str
+
+
+class ProjectManager(Protocol):
+    """Interface for project management."""
+
+    def get_or_create_project(self, workdir: Path) -> "_ProjectMetadata":
+        """Get an existing project or create a new one.
+
+        Args:
+            workdir: Working directory path for the project
+
+        Returns:
+            ProjectMetadata instance
+        """
+        ...
+
+    def get_project(self, project_id: str) -> "Optional[_ProjectMetadata]":
+        """Get a project by ID.
+
+        Args:
+            project_id: Project ID to retrieve
+
+        Returns:
+            ProjectMetadata if found, None otherwise
+        """
+        ...
+
+    def list_projects(self, limit: "Optional[int]" = None) -> "List[_ProjectMetadata]":
+        """List all projects.
+
+        Args:
+            limit: Optional maximum number of projects to return
+
+        Returns:
+            List of ProjectMetadata instances
+        """
+        ...
+
+    def get_current_project(self) -> "Optional[_ProjectMetadata]":
+        """Get the currently active project.
+
+        Returns:
+            Current ProjectMetadata or None
+        """
+        ...
+
+    def set_current_project(self, project: "_ProjectMetadata") -> None:
+        """Set the currently active project.
+
+        Args:
+            project: Project to set as current
+        """
+        ...
+
+
+class SessionManager(Protocol):
+    """Interface for session management."""
+
+    def create_session(
+        self,
+        project_id: str,
+        parent_session_id: "Optional[str]" = None,
+        title: "Optional[str]" = None,
+    ) -> "_SessionMetadata":
+        """Create a new session.
+
+        Args:
+            project_id: Project ID to create session under
+            parent_session_id: Optional parent session ID for branching
+            title: Optional session title
+
+        Returns:
+            SessionMetadata for the new session
+        """
+        ...
+
+    def get_session(
+        self,
+        project_id: str,
+        session_id: str,
+    ) -> "Optional[_SessionMetadata]":
+        """Get session metadata by ID.
+
+        Args:
+            project_id: Project ID
+            session_id: Session ID
+
+        Returns:
+            SessionMetadata if found, None otherwise
+        """
+        ...
+
+    def append_message(
+        self,
+        project_id: str,
+        session_id: str,
+        message: "_SessionMessage",
+    ) -> None:
+        """Append a message to a session.
+
+        Args:
+            project_id: Project ID
+            session_id: Session ID
+            message: Message to append
+        """
+        ...
+
+    def read_messages(
+        self,
+        project_id: str,
+        session_id: str,
+        limit: "Optional[int]" = None,
+    ) -> "List[_SessionMessage]":
+        """Read messages from a session.
+
+        Args:
+            project_id: Project ID
+            session_id: Session ID
+            limit: Optional maximum number of messages to return
+
+        Returns:
+            List of SessionMessage instances
+        """
+        ...
+
+    def stream_messages(
+        self,
+        project_id: str,
+        session_id: str,
+    ) -> "Generator[_SessionMessage, None, None]":
+        """Stream messages from a session (memory-efficient).
+
+        Args:
+            project_id: Project ID
+            session_id: Session ID
+
+        Yields:
+            SessionMessage instances one at a time
+        """
+        ...
+
+    def save_subagent(
+        self,
+        project_id: str,
+        session_id: str,
+        agent_id: str,
+        metadata: "_SubagentMetadata",
+    ) -> None:
+        """Save subagent metadata.
+
+        Args:
+            project_id: Project ID
+            session_id: Session ID
+            agent_id: Subagent ID
+            metadata: Subagent metadata to save
+        """
+        ...
+
+    def list_sessions(
+        self,
+        project_id: str,
+        include_archived: bool = False,
+        limit: "Optional[int]" = None,
+    ) -> "List[_SessionMetadata]":
+        """List sessions for a project.
+
+        Args:
+            project_id: Project ID
+            include_archived: Whether to include archived sessions
+            limit: Optional maximum number of sessions to return
+
+        Returns:
+            List of SessionMetadata instances
+        """
+        ...
+
+    def archive_session(
+        self,
+        project_id: str,
+        session_id: str,
+    ) -> "Optional[_SessionMetadata]":
+        """Archive a session.
+
+        Args:
+            project_id: Project ID
+            session_id: Session ID to archive
+
+        Returns:
+            Updated SessionMetadata or None if session not found
+        """
+        ...
+
+    def get_current_session(self) -> "Optional[_SessionMetadata]":
+        """Get the currently active session.
+
+        Returns:
+            Current SessionMetadata or None
+        """
+        ...
+
+    def set_current_session(self, session: "_SessionMetadata") -> None:
+        """Set the currently active session.
+
+        Args:
+            session: Session to set as current
         """
         ...

@@ -107,8 +107,10 @@ def main(
 @app.command("chat")
 def chat_command(
     ctx: typer.Context,
+    resume: str = typer.Option(None, "--resume", "-r", help="Resume from session ID"),
 ):
     """Start interactive chat mode."""
+    import time
     settings = ctx.obj or Settings()
 
     # Create permission manager with status controller
@@ -116,11 +118,39 @@ def chat_command(
     permission_manager = PermissionManager(status_controller=status_controller)
 
     agent = _get_agent(settings, permission_manager)
-    history = []
+
+    # Initialize project and session
+    from simple_agent.managers.project import ProjectManager
+    from simple_agent.managers.session import SessionManager
+    from simple_agent.models.projects import SessionMessage
+
+    pm = ProjectManager(settings)
+    sm = SessionManager(settings)
+
+    # Get or create project
+    project = pm.get_or_create_project(settings.workdir)
+    pm.set_current_project(project)
+
+    # Resume session or create new one
+    if resume:
+        session = sm.get_session(project.project_id, resume)
+        if not session:
+            console.print(f"[red]Session '{resume}' not found.[/red]")
+            raise typer.Exit(1)
+        # Load session history
+        saved_messages = sm.read_messages(project.project_id, session.session_id)
+        history = []
+        for msg in saved_messages:
+            history.append({"role": msg.role, "content": msg.content})
+    else:
+        session = sm.create_session(project.project_id, title="Chat Session")
+        sm.set_current_session(session)
+        history = []
 
     provider_name = settings.get_active_provider()
     console.print(f"[cyan]simple-agent[/cyan] - AI Agent at {settings.workdir}")
     console.print(f"Provider: [green]{provider_name}[/green] | Model: [yellow]{settings.model_id or 'default'}[/yellow]")
+    console.print(f"Session: [cyan]{session.session_id[:8]}...[/cyan]" + (f" (resumed)" if resume else ""))
     console.print("Type 'exit' or 'quit' to end the session.")
     console.print("Use [cyan]↑/↓[/cyan] arrows for history, [cyan]Tab[/cyan] for completion.\n")
 
@@ -141,6 +171,14 @@ def chat_command(
             console.print("[yellow]Goodbye![/yellow]")
             break
 
+        # Save user message to session
+        user_msg = SessionMessage(
+            role="user",
+            content=query,
+            timestamp=time.time()
+        )
+        sm.append_message(project.project_id, session.session_id, user_msg)
+
         history.append({"role": "user", "content": query})
 
         # Use status with explicit end to allow permission panels to display properly
@@ -154,7 +192,7 @@ def chat_command(
             continue
         status.stop()
 
-        # Display response
+        # Display response and save to session
         for msg in reversed(history):
             if msg.get("role") == "assistant":
                 content = msg.get("content", [])
@@ -166,6 +204,13 @@ def chat_command(
                             break
                     if response:
                         console.print(Markdown(response))
+                        # Save assistant message to session
+                        assistant_msg = SessionMessage(
+                            role="assistant",
+                            content=response,
+                            timestamp=time.time()
+                        )
+                        sm.append_message(project.project_id, session.session_id, assistant_msg)
                 break
 
         console.print()
@@ -276,6 +321,148 @@ def inbox_command(ctx: typer.Context):
         console.print(json.dumps(msgs, indent=2))
     else:
         console.print("[yellow]No messages in inbox.[/yellow]")
+
+
+# ============================================================================
+# Project Management Commands
+# ============================================================================
+
+@app.command("project-list")
+def project_list_command(ctx: typer.Context):
+    """List all projects."""
+    settings = ctx.obj or Settings()
+    from simple_agent.managers.project import ProjectManager
+
+    pm = ProjectManager(settings)
+    projects = pm.list_projects()
+
+    if not projects:
+        console.print("[yellow]No projects found.[/yellow]")
+        return
+
+    console.print("\n[bold]Projects:[/bold]\n")
+    for p in projects:
+        console.print(f"  [cyan]{p.project_id}[/cyan]")
+        console.print(f"    Path: {p.original_path}")
+        console.print(f"    Sessions: {p.session_count}")
+        console.print(f"    Last accessed: {p.last_accessed.strftime('%Y-%m-%d %H:%M')}")
+        console.print()
+
+
+@app.command("project-info")
+def project_info_command(
+    ctx: typer.Context,
+    project_id: str = typer.Argument(None, help="Project ID (defaults to current)"),
+):
+    """Show project details."""
+    settings = ctx.obj or Settings()
+    from simple_agent.managers.project import ProjectManager
+
+    pm = ProjectManager(settings)
+
+    # Use current project if no ID provided
+    if not project_id:
+        current = pm.get_current_project()
+        if not current:
+            console.print("[yellow]No current project. Use --project-id or specify a project.[/yellow]")
+            return
+        project_id = current.project_id
+
+    project = pm.get_project(project_id)
+    if not project:
+        console.print(f"[red]Project '{project_id}' not found.[/red]")
+        return
+
+    console.print(f"\n[bold]Project: {project.project_id}[/bold]\n")
+    console.print(f"  Path: {project.original_path}")
+    console.print(f"  Sessions: {project.session_count}")
+    console.print(f"  Created: {project.created_at.strftime('%Y-%m-%d %H:%M:%S')}")
+    console.print(f"  Last accessed: {project.last_accessed.strftime('%Y-%m-%d %H:%M:%S')}")
+
+
+# ============================================================================
+# Session Management Commands
+# ============================================================================
+
+@app.command("session-list")
+def session_list_command(
+    ctx: typer.Context,
+    project_id: str = typer.Option(None, "--project", "-p", help="Project ID (defaults to current)"),
+    limit: int = typer.Option(10, "--limit", "-n", help="Maximum sessions to show"),
+):
+    """List sessions for a project."""
+    settings = ctx.obj or Settings()
+    from simple_agent.managers.project import ProjectManager
+    from simple_agent.managers.session import SessionManager
+
+    pm = ProjectManager(settings)
+    sm = SessionManager(settings)
+
+    # Use current project if no ID provided
+    if not project_id:
+        current = pm.get_current_project()
+        if not current:
+            console.print("[yellow]No current project. Use --project or specify a project.[/yellow]")
+            return
+        project_id = current.project_id
+
+    sessions = sm.list_sessions(project_id, limit=limit)
+
+    if not sessions:
+        console.print(f"[yellow]No sessions found for project '{project_id}'.[/yellow]")
+        return
+
+    console.print(f"\n[bold]Sessions for {project_id}:[/bold]\n")
+    for s in sessions:
+        status_icon = "[green]*[/green]" if s.status == "active" else "[dim]-[/dim]"
+        title = s.title or "(no title)"
+        console.print(f"  {status_icon} [cyan]{s.session_id[:8]}...[/cyan] {title}")
+        console.print(f"    Messages: {s.message_count}")
+        console.print(f"    Created: {s.created_at.strftime('%Y-%m-%d %H:%M')}")
+        if s.parent_session_id:
+            console.print(f"    Parent: {s.parent_session_id[:8]}...")
+        console.print()
+
+
+@app.command("session-show")
+def session_show_command(
+    ctx: typer.Context,
+    session_id: str = typer.Argument(..., help="Session ID"),
+    project_id: str = typer.Option(None, "--project", "-p", help="Project ID (defaults to current)"),
+    limit: int = typer.Option(20, "--limit", "-n", help="Number of messages to show"),
+):
+    """Show session history."""
+    settings = ctx.obj or Settings()
+    from simple_agent.managers.project import ProjectManager
+    from simple_agent.managers.session import SessionManager
+
+    pm = ProjectManager(settings)
+    sm = SessionManager(settings)
+
+    # Use current project if no ID provided
+    if not project_id:
+        current = pm.get_current_project()
+        if not current:
+            console.print("[yellow]No current project. Use --project or specify a project.[/yellow]")
+            return
+        project_id = current.project_id
+
+    session = sm.get_session(project_id, session_id)
+    if not session:
+        console.print(f"[red]Session '{session_id}' not found.[/red]")
+        return
+
+    messages = sm.read_messages(project_id, session_id, limit=limit)
+
+    console.print(f"\n[bold]Session: {session_id[:8]}...[/bold]")
+    if session.title:
+        console.print(f"Title: {session.title}")
+    console.print(f"Messages: {session.message_count} (showing last {len(messages)})\n")
+
+    for msg in messages:
+        role_color = "green" if msg.role == "user" else "blue"
+        console.print(f"[{role_color}]{msg.role}:[/{role_color}] {msg.content[:200]}...")
+        console.print()
 
 
 @app.command("compact")

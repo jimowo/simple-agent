@@ -14,6 +14,8 @@ if TYPE_CHECKING:
     from simple_agent.interfaces.managers import (
         BackgroundManager,
         MessageBus,
+        ProjectManager,
+        SessionManager,
         SkillLoader,
         TaskManager,
         TeammateManager,
@@ -38,6 +40,8 @@ class AgentContext:
         bus: Message bus instance
         skill_loader: Skill loader instance
         teammate: Teammate manager instance
+        project_mgr: Project manager instance
+        session_mgr: Session manager instance
         provider: AI provider instance
     """
 
@@ -48,6 +52,8 @@ class AgentContext:
     bus: "MessageBus"
     skill_loader: "SkillLoader"
     teammate: "TeammateManager"
+    project_mgr: "ProjectManager"
+    session_mgr: "SessionManager"
     provider: BaseProvider
 
     @property
@@ -82,6 +88,8 @@ Skills available:
         from simple_agent.interfaces.managers import (
             BackgroundManager,
             MessageBus,
+            ProjectManager,
+            SessionManager,
             SkillLoader,
             TaskManager,
             TeammateManager,
@@ -104,5 +112,7 @@ Skills available:
             bus=container.resolve(MessageBus),
             skill_loader=container.resolve(SkillLoader),
             teammate=container.resolve(TeammateManager),
+            project_mgr=container.resolve(ProjectManager),
+            session_mgr=container.resolve(SessionManager),
             provider=provider,
         )

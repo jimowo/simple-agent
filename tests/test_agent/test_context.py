@@ -20,6 +20,8 @@ class TestAgentContext:
         from simple_agent.managers.message import MessageBus
         from simple_agent.managers.skill import SkillLoader
         from simple_agent.managers.teammate import TeammateManager
+        from simple_agent.managers.project import ProjectManager
+        from simple_agent.managers.session import SessionManager
 
         todo = TodoManager()
         task = TaskManager(mock_settings)
@@ -27,6 +29,8 @@ class TestAgentContext:
         bus = MessageBus(mock_settings)
         skill = SkillLoader(settings=mock_settings)
         teammate = TeammateManager(bus, task, mock_settings)
+        project = ProjectManager(mock_settings)
+        session = SessionManager(mock_settings)
 
         context = AgentContext(
             settings=mock_settings,
@@ -36,6 +40,8 @@ class TestAgentContext:
             bus=bus,
             skill_loader=skill,
             teammate=teammate,
+            project_mgr=project,
+            session_mgr=session,
             provider=mock_provider,
         )
 
@@ -46,6 +52,8 @@ class TestAgentContext:
         assert context.bus is bus
         assert context.skill_loader is skill
         assert context.teammate is teammate
+        assert context.project_mgr is project
+        assert context.session_mgr is session
         assert context.provider is mock_provider
 
     def test_system_prompt_property(self, initialized_context):
@@ -95,6 +103,8 @@ class TestAgentContext:
             assert context.bus is not None
             assert context.skill_loader is not None
             assert context.teammate is not None
+            assert context.project_mgr is not None
+            assert context.session_mgr is not None
 
 
 class TestContextIntegration:

@@ -453,6 +453,98 @@ class ServiceValidationError(ContainerError):
 
 
 # ============================================================================
+# Project Errors
+# ============================================================================
+
+class ProjectError(SimpleAgentError):
+    """Base exception for project-related errors."""
+
+    pass
+
+
+class ProjectNotFoundError(ProjectError):
+    """Raised when a project is not found."""
+
+    def __init__(self, project_id: str):
+        """Initialize the exception.
+
+        Args:
+            project_id: The missing project ID
+        """
+        super().__init__(
+            f"Project '{project_id}' not found",
+            details={"project_id": project_id}
+        )
+
+
+class ProjectValidationError(ProjectError):
+    """Raised when project validation fails."""
+
+    def __init__(self, reason: str, project_id: Optional[str] = None):
+        """Initialize the exception.
+
+        Args:
+            reason: Validation failure reason
+            project_id: Optional project ID that failed validation
+        """
+        details = {"reason": reason}
+        if project_id:
+            details["project_id"] = project_id
+        super().__init__(
+            f"Project validation failed: {reason}",
+            details=details
+        )
+
+
+# ============================================================================
+# Session Errors
+# ============================================================================
+
+class SessionError(SimpleAgentError):
+    """Base exception for session-related errors."""
+
+    pass
+
+
+class SessionNotFoundError(SessionError):
+    """Raised when a session is not found."""
+
+    def __init__(self, session_id: str, project_id: Optional[str] = None):
+        """Initialize the exception.
+
+        Args:
+            session_id: The missing session ID
+            project_id: Optional project ID
+        """
+        details = {"session_id": session_id}
+        if project_id:
+            details["project_id"] = project_id
+        message = f"Session '{session_id}' not found"
+        if project_id:
+            message += f" in project '{project_id}'"
+        super().__init__(message, details=details)
+
+
+class SessionValidationError(SessionError):
+    """Raised when session validation fails."""
+
+    def __init__(self, reason: str, session_id: Optional[str] = None):
+        """Initialize the exception.
+
+        Args:
+            reason: Validation failure reason
+            session_id: Optional session ID that failed validation
+        """
+        details = {"reason": reason}
+        if session_id:
+            details["session_id"] = session_id
+        super().__init__(
+            f"Session validation failed: {reason}",
+            details=details
+        )
+
+
+# ============================================================================
 # Convenience exports
 # ============================================================================
 
@@ -499,4 +591,14 @@ __all__ = [
     "ContainerError",
     "ServiceNotFoundError",
     "ServiceValidationError",
+
+    # Projects
+    "ProjectError",
+    "ProjectNotFoundError",
+    "ProjectValidationError",
+
+    # Sessions
+    "SessionError",
+    "SessionNotFoundError",
+    "SessionValidationError",
 ]

@@ -17,6 +17,7 @@ wheels/
 .chat_history
 .tasks
 .team
+.simple
 .logs
 
 # Claude Code

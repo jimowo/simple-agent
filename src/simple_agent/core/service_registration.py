@@ -26,6 +26,8 @@ def register_managers(container: ServiceContainer) -> None:
     from simple_agent.interfaces.managers import (
         BackgroundManager,
         MessageBus,
+        ProjectManager,
+        SessionManager,
         SkillLoader,
         TaskManager,
         TeammateManager,
@@ -33,6 +35,8 @@ def register_managers(container: ServiceContainer) -> None:
     )
     from simple_agent.managers.background import BackgroundManager as BackgroundManagerImpl
     from simple_agent.managers.message import MessageBus as MessageBusImpl
+    from simple_agent.managers.project import ProjectManager as ProjectManagerImpl
+    from simple_agent.managers.session import SessionManager as SessionManagerImpl
     from simple_agent.managers.skill import SkillLoader as SkillLoaderImpl
     from simple_agent.managers.task import TaskManager as TaskManagerImpl
     from simple_agent.managers.teammate import TeammateManager as TeammateManagerImpl
@@ -76,6 +80,18 @@ def register_managers(container: ServiceContainer) -> None:
             task_mgr=c.resolve(TaskManager),
             settings=c.resolve(Settings),
         ),
+    )
+
+    # ProjectManager - depends on Settings
+    container.register_singleton(
+        ProjectManager,
+        lambda c: ProjectManagerImpl(settings=c.resolve(Settings)),
+    )
+
+    # SessionManager - depends on Settings
+    container.register_singleton(
+        SessionManager,
+        lambda c: SessionManagerImpl(settings=c.resolve(Settings)),
     )
 
 
@@ -152,6 +168,8 @@ def get_managers(container: ServiceContainer | None = None) -> Dict[str, Any]:
     from simple_agent.interfaces.managers import (
         BackgroundManager,
         MessageBus,
+        ProjectManager,
+        SessionManager,
         SkillLoader,
         TaskManager,
         TeammateManager,
@@ -165,4 +183,6 @@ def get_managers(container: ServiceContainer | None = None) -> Dict[str, Any]:
         "bus": container.resolve(MessageBus),
         "skill": container.resolve(SkillLoader),
         "teammate": container.resolve(TeammateManager),
+        "project": container.resolve(ProjectManager),
+        "session": container.resolve(SessionManager),
     }

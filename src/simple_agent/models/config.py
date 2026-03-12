@@ -52,6 +52,20 @@ class Settings(BaseSettings):
     transcript_dir: Path = Field(default_factory=lambda: Path.cwd() / ".transcripts")
     logs_dir: Path = Field(default_factory=lambda: Path.cwd() / ".logs")
 
+    # Project and session configuration
+    projects_root: Path = Field(
+        default_factory=lambda: Path.cwd() / ".simple" / "projects",
+        alias="PROJECTS_ROOT"
+    )
+    auto_archive_days: int = Field(
+        default=30,
+        alias="AUTO_ARCHIVE_DAYS"
+    )
+    max_sessions_per_project: int = Field(
+        default=100,
+        alias="MAX_SESSIONS_PER_PROJECT"
+    )
+
     # Provider settings
     default_provider: str = Field(default="anthropic", alias="DEFAULT_PROVIDER")
     provider: str = Field(default="anthropic", alias="PROVIDER")  # Runtime override
