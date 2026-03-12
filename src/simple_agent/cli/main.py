@@ -150,13 +150,20 @@ def chat_command(
     provider_name = settings.get_active_provider()
     console.print(f"[cyan]simple-agent[/cyan] - AI Agent at {settings.workdir}")
     console.print(f"Provider: [green]{provider_name}[/green] | Model: [yellow]{settings.model_id or 'default'}[/yellow]")
-    console.print(f"Session: [cyan]{session.session_id[:8]}...[/cyan]" + (f" (resumed)" if resume else ""))
+    console.print(f"Session: [cyan]{session.session_id[:8]}...[/cyan]" + (" (resumed)" if resume else ""))
     console.print("Type 'exit' or 'quit' to end the session.")
+    console.print("Use [cyan]/sessions[/cyan] to list, [cyan]/resume <id>[/cyan] to switch sessions.")
     console.print("Use [cyan]↑/↓[/cyan] arrows for history, [cyan]Tab[/cyan] for completion.\n")
 
-    # Create interactive prompt with history support
+    # Create interactive prompt with session-specific history
+    def get_session_history_file(session_id: str) -> Path:
+        """Get history file path for a specific session."""
+        project_dir = settings.workdir / ".simple" / "projects" / project.project_id
+        session_dir = project_dir / session_id
+        return session_dir / "chat_history"
+
     prompt_session = InteractivePrompt(
-        history_file=settings.workdir / ".chat_history",
+        history_file=get_session_history_file(session.session_id),
         history_size=1000,
         enable_completion=True,
     )
@@ -167,9 +174,31 @@ def chat_command(
         except (EOFError, KeyboardInterrupt):
             break
 
-        if query.strip().lower() in ("q", "exit", "quit", ""):
+        query = query.strip()
+
+        # Handle built-in commands
+        if query.lower() in ("q", "exit", "quit", ""):
             console.print("[yellow]Goodbye![/yellow]")
             break
+
+        # Handle session commands
+        if query.startswith("/"):
+            result = _handle_session_command(query, project, sm, console)
+            if result == "exit":
+                break
+            elif result == "switched":
+                # Session was switched, update the session reference
+                session = sm.get_current_session()
+                saved_messages = sm.read_messages(project.project_id, session.session_id)
+                history = []
+                for msg in saved_messages:
+                    history.append({"role": msg.role, "content": msg.content})
+                # Switch history file to match new session
+                prompt_session.set_history_file(get_session_history_file(session.session_id))
+                console.print(f"[yellow]Session switched: {session.session_id[:8]}...[/yellow]\n")
+                continue
+            else:
+                continue  # Command was handled, continue to next iteration
 
         # Save user message to session
         user_msg = SessionMessage(
@@ -510,6 +539,121 @@ def providers_command():
 def main_cli():
     """Main entry point for CLI."""
     app()
+
+
+def _handle_session_command(query: str, project, sm, console) -> str:
+    """Handle session-related commands in chat mode.
+
+    Args:
+        query: User query (should start with /)
+        project: Current project
+        sm: SessionManager instance
+        console: Rich console instance
+
+    Returns:
+        "exit" if user wants to exit, "switched" if session was switched, None otherwise
+    """
+    parts = query.split()
+    cmd = parts[0].lower()
+
+    if cmd in ("/sessions", "/list", "/ls"):
+        # List sessions
+        sessions = sm.list_sessions(project.project_id, limit=10)
+
+        console.print(f"\n[bold]Sessions for {project.project_id}:[/bold]\n")
+        if not sessions:
+            console.print("[yellow]No sessions found.[/yellow]")
+        else:
+            current_session_id = sm.get_current_session().session_id if sm.get_current_session() else ""
+            for i, s in enumerate(sessions, 1):
+                status = "[green]*[/green]" if s.status == "active" else "[dim]-[/dim]"
+                title = s.title or "(no title)"
+                is_current = "[dim](current)[/dim]" if s.session_id == current_session_id else ""
+                console.print(f"  {i}. {status} [cyan]{s.session_id[:8]}...[/cyan] {title} {is_current}")
+                console.print(f"     Messages: {s.message_count} | Created: {s.created_at.strftime('%Y-%m-%d %H:%M')}")
+        console.print()
+        return None
+
+    elif cmd in ("/resume", "/switch"):
+        # Resume a session
+        if len(parts) < 2:
+            console.print("[yellow]Usage: /resume <session-id> or /resume <number>[/yellow]")
+            console.print("[yellow]Use /sessions to see available sessions.[/yellow]")
+            return None
+
+        identifier = parts[1]
+        target_session = None
+
+        # Try to parse as number (index from /sessions list)
+        if identifier.isdigit():
+            sessions = sm.list_sessions(project.project_id, limit=10)
+            idx = int(identifier) - 1
+            if 0 <= idx < len(sessions):
+                target_session = sessions[idx]
+
+        # Try to find by session ID prefix
+        if not target_session:
+            sessions = sm.list_sessions(project.project_id)
+            for s in sessions:
+                if s.session_id.startswith(identifier):
+                    target_session = s
+                    break
+
+        if not target_session:
+            console.print(f"[red]Session '{identifier}' not found.[/red]")
+            return None
+
+        # Switch to the new session
+        console.print(f"\n[yellow]Switching to session:[/yellow] {target_session.session_id}")
+        console.print(f"Title: {target_session.title or '(no title)'}")
+        console.print(f"Messages: {target_session.message_count}\n")
+
+        # Update current session in session manager
+        sm.set_current_session(target_session)
+        return "switched"
+
+    elif cmd in ("/help", "/?"):
+        # Show help
+        console.print("\n[bold]Available commands:[/bold]\n")
+        console.print("  /sessions, /list, /ls    - List all sessions")
+        console.print("  /resume <id>            - Resume a session (use ID or number)")
+        console.print("  /clear                  - Clear screen")
+        console.print("  /history                - Show command history")
+        console.print("  /help, /?               - Show this help message")
+        console.print("  /exit, /quit            - Exit the session\n")
+        return None
+
+    elif cmd == "/clear":
+        # Clear screen (works on most terminals)
+        console.clear()
+        return None
+
+    elif cmd == "/history":
+        # Show command history from current session
+        # Get current session's history file
+        if sm.get_current_session():
+            workdir = Path(project.original_path)
+            history_file = workdir / ".simple" / "projects" / project.project_id / sm.get_current_session().session_id / "chat_history"
+            if history_file.exists():
+                console.print("\n[bold]Command history:[/bold]\n")
+                with open(history_file, "r", encoding="utf-8") as f:
+                    for i, line in enumerate(f, 1):
+                        if line.strip() and not line.startswith("#"):
+                            console.print(f"  {i}. {line.strip()}")
+                console.print()
+            else:
+                console.print("[yellow]No command history found.[/yellow]")
+        else:
+            console.print("[yellow]No active session.[/yellow]")
+        return None
+
+    elif cmd in ("/exit", "/quit"):
+        return "exit"
+
+    else:
+        console.print(f"[yellow]Unknown command: {cmd}[/yellow]")
+        console.print("[yellow]Type /help for available commands.[/yellow]")
+        return None
 
 
 if __name__ == "__main__":

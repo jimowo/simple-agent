@@ -2,7 +2,7 @@
 
 This module provides an enhanced input experience with:
 - Up/Down arrow keys for history navigation (like bash HISTSIZE)
-- Tab key for auto-completion of commands
+- Tab key for auto-completion of commands (all commands start with /)
 - Persistent history across sessions
 """
 
@@ -23,11 +23,16 @@ class CommandCompleter(Completer):
     def __init__(self) -> None:
         """Initialize with common command suggestions."""
         self.commands = [
-            "exit",
-            "quit",
-            "help",
-            "clear",
-            "history",
+            "/exit",
+            "/quit",
+            "/help",
+            "/clear",
+            "/history",
+            "/sessions",
+            "/list",
+            "/ls",
+            "/resume",
+            "/switch",
             # Add more commands as needed
         ]
 
@@ -73,6 +78,7 @@ class InteractivePrompt:
     - Up/Down arrows for history navigation
     - Tab for auto-completion
     - History search with Ctrl+R
+    - Dynamic history file switching for session-specific history
     """
 
     def __init__(
@@ -141,6 +147,28 @@ class InteractivePrompt:
             event.app.exit(exception=EOFError)
 
         return kb
+
+    def set_history_file(self, history_file: Path) -> None:
+        """Switch to a different history file.
+
+        This allows session-specific history when switching between sessions.
+
+        Args:
+            history_file: New path to history file
+        """
+        self.history_file = history_file
+        self.history_file.parent.mkdir(parents=True, exist_ok=True)
+
+        # Recreate the session with new history file
+        self.session = self._create_session()
+
+    def get_history_file(self) -> Path:
+        """Get the current history file path.
+
+        Returns:
+            Current history file path
+        """
+        return self.history_file
 
     def prompt(self, message: str = "> ") -> str:
         """Get user input with history and completion support.

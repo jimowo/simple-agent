@@ -67,7 +67,7 @@ class ProjectManager(BaseManager):
                 project = ProjectMetadata(**data)
                 # Update last accessed time
                 project.last_accessed = project.last_accessed.now()
-            except (json.JSONDecodeError, ValueError) as e:
+            except (json.JSONDecodeError, ValueError):
                 # If metadata is corrupted, create new project
                 project = ProjectMetadata(
                     project_id=project_id,

@@ -65,12 +65,38 @@ class AgentLoop:
     def _compress_if_needed(self, messages: List[Dict[str, Any]]) -> None:
         """Compress messages if token threshold exceeded.
 
+        This method now uses session-aware compression when a session is active,
+        saving the full conversation history to the session file and optionally
+        creating a branch for the compressed conversation.
+
         Args:
-            messages: Message history list (modified in-place)
+            messages: Message history list (modified-in-place)
         """
         microcompact(messages)
         if estimate_tokens(messages) > self._ctx.settings.token_threshold:
             print("[auto-compact triggered]")
+
+            # Try session-aware compression if session is available
+            current_session = self._ctx.session_mgr.get_current_session()
+            if current_session:
+                from simple_agent.utils.compression import session_aware_compact
+
+                try:
+                    messages[:] = session_aware_compact(
+                        messages,
+                        self._ctx.provider,
+                        self._ctx.settings.model_id or "default",
+                        current_session.project_id,
+                        current_session.session_id,
+                        self._ctx.session_mgr,
+                        create_branch=False,  # Can be made configurable later
+                    )
+                    print(f"[Session saved: {current_session.session_id[:8]}...]")
+                    return
+                except Exception as e:
+                    print(f"[Session compression failed: {e}, using legacy method]")
+
+            # Fallback to legacy compression
             messages[:] = auto_compact(
                 messages,
                 self._ctx.provider,

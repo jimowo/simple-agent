@@ -13,8 +13,8 @@ from typing import Generator, List, Optional
 from simple_agent.managers.base import BaseManager
 from simple_agent.models.config import Settings
 from simple_agent.models.projects import (
-    SessionMetadata,
     SessionMessage,
+    SessionMetadata,
     SubagentMetadata,
 )
 
