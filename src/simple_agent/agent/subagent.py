@@ -5,9 +5,11 @@ Single Responsibility Principle (SRP) by solely being responsible for
 running sub-agents with isolated tool access.
 """
 
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
+from simple_agent.agent.context import AgentContext
 from simple_agent.providers.base import BaseProvider
+from simple_agent.tools.handler_registry import ToolHandlerRegistry
 from simple_agent.utils.constants import MAX_TOOL_OUTPUT, LoopIterations
 
 
@@ -20,15 +22,22 @@ class SubAgentRunner:
 
     Attributes:
         provider: AI provider to use for sub-agent
+        tool_registry: Tool handler registry (optional, creates minimal handlers if None)
     """
 
-    def __init__(self, provider: BaseProvider) -> None:
+    def __init__(
+        self,
+        provider: BaseProvider,
+        tool_registry: Optional[ToolHandlerRegistry] = None,
+    ) -> None:
         """Initialize the sub-agent runner.
 
         Args:
             provider: AI provider instance
+            tool_registry: Optional tool handler registry (creates minimal handlers if None)
         """
         self._provider = provider
+        self._tool_registry = tool_registry
 
     def run(self, prompt: str, agent_type: str = "Explore") -> str:
         """Run a sub-agent with the given prompt.
@@ -45,7 +54,7 @@ class SubAgentRunner:
             Summary of sub-agent work
         """
         tools = self._build_tools(agent_type)
-        handlers = self._build_handlers()
+        handlers = self._build_handlers(agent_type)
         messages = [{"role": "user", "content": prompt}]
 
         for _ in range(LoopIterations.MAX_SUBAGENT_ITERATIONS):
@@ -75,21 +84,40 @@ class SubAgentRunner:
 
         return get_subagent_tools(agent_type)
 
-    def _build_handlers(self) -> Dict[str, Callable]:
+    def _build_handlers(self, agent_type: str) -> Dict[str, Callable]:
         """Build tool handlers for sub-agent.
+
+        Args:
+            agent_type: Type of agent to determine available tools
 
         Returns:
             Dictionary mapping tool names to handler functions
         """
+        # Define available tools for each agent type
+        explore_tools = ["bash", "read_file"]
+        general_tools = ["bash", "read_file", "write_file", "edit_file"]
+
+        tool_names = explore_tools if agent_type == "Explore" else general_tools
+
+        # Use ToolHandlerRegistry if available
+        if self._tool_registry is not None:
+            return self._tool_registry.get_handlers(tool_names)
+
+        # Fallback to minimal handlers (for backward compatibility)
         from simple_agent.tools.bash_tools import run_bash
         from simple_agent.tools.file_tools import edit_file, read_file, write_file
 
         handlers = {
             "bash": lambda **kw: run_bash(kw["command"]),
             "read_file": lambda **kw: read_file(kw["path"]),
-            "write_file": lambda **kw: write_file(kw["path"], kw["content"]),
-            "edit_file": lambda **kw: edit_file(kw["path"], kw["old_text"], kw["new_text"]),
         }
+
+        # Add write/edit tools for non-Explore agents
+        if agent_type != "Explore":
+            handlers.update({
+                "write_file": lambda **kw: write_file(kw["path"], kw["content"]),
+                "edit_file": lambda **kw: edit_file(kw["path"], kw["old_text"], kw["new_text"]),
+            })
 
         return handlers
 

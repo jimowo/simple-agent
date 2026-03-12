@@ -205,17 +205,36 @@ class Agent:
     def _initialize_tool_handlers(self) -> None:
         """Initialize tool handlers with managers from context.
 
-        This sets up the global tool handler state for backward compatibility.
-        Future versions should use dependency injection instead.
+        This creates a ToolHandlerRegistry using dependency injection,
+        following modern best practices. Global state initialization is
+        kept for backward compatibility only.
         """
         from simple_agent.permissions import PermissionManager
-        from simple_agent.tools.tool_handlers import initialize_handlers
+        from simple_agent.tools.handler_registry import ToolHandlerRegistry
 
         # Use provided permission manager or create a default one
         if self._external_permission_manager is not None:
             permission_manager = self._external_permission_manager
         else:
             permission_manager = PermissionManager()
+
+        # Create tool handler registry using dependency injection
+        self._tool_registry = ToolHandlerRegistry(self._ctx, permission_manager)
+
+        # Store permission manager for access
+        self._permission_manager = permission_manager
+
+        # Initialize global state for backward compatibility
+        # TODO: Remove this in future version when all code uses DI
+        self._initialize_legacy_handlers(permission_manager)
+
+    def _initialize_legacy_handlers(self, permission_manager) -> None:
+        """Initialize legacy global tool handlers for backward compatibility.
+
+        DEPRECATED: This method exists for backward compatibility only.
+        New code should use ToolHandlerRegistry via dependency injection.
+        """
+        from simple_agent.tools.tool_handlers import initialize_handlers
 
         initialize_handlers(
             self._ctx.todo,
@@ -228,9 +247,6 @@ class Agent:
             self._ctx.settings,
             permission_manager=permission_manager,
         )
-
-        # Store permission manager for access
-        self._permission_manager = permission_manager
 
     @property
     def settings(self) -> Settings:
@@ -340,8 +356,8 @@ class Agent:
 
         history.append({"role": "user", "content": query})
 
-        # Use AgentLoop for the conversation logic
-        loop = AgentLoop(self._ctx)
+        # Use AgentLoop for the conversation logic with ToolHandlerRegistry
+        loop = AgentLoop(self._ctx, self._tool_registry, self._permission_manager)
         loop.run(history)
 
         # Extract and return the last assistant response

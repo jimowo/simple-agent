@@ -2,14 +2,15 @@
 
 This module implements the AgentLoop class following SOLID principles:
 - Single Responsibility Principle (SRP): Focused solely on conversation loop execution
-- Dependency Inversion Principle (DIP): Uses AgentContext for dependencies
+- Dependency Inversion Principle (DIP): Uses AgentContext and ToolHandlerRegistry for dependencies
 """
 
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from simple_agent.agent.context import AgentContext
-from simple_agent.tools.tool_handlers import TOOL_HANDLERS, TOOLS
+from simple_agent.tools.handler_registry import ToolHandlerRegistry
+from simple_agent.tools.tool_definitions import TOOLS
 from simple_agent.utils.compression import auto_compact, estimate_tokens, microcompact
 
 
@@ -23,17 +24,31 @@ class AgentLoop:
 
     Attributes:
         _ctx: Agent context containing all dependencies
+        _tool_registry: Tool handler registry for executing tools
         _rounds_without_todo: Counter for tracking todo usage
     """
 
-    def __init__(self, context: AgentContext) -> None:
+    def __init__(
+        self,
+        context: AgentContext,
+        tool_registry: Optional[ToolHandlerRegistry] = None,
+        permission_manager=None,
+    ) -> None:
         """Initialize the agent loop.
 
         Args:
             context: Agent context with all dependencies
+            tool_registry: Optional tool handler registry (created from context if None)
+            permission_manager: Optional permission manager (for backward compatibility)
         """
         self._ctx = context
         self._rounds_without_todo = 0
+
+        # Create or use provided tool registry
+        if tool_registry is None:
+            self._tool_registry = ToolHandlerRegistry(context, permission_manager)
+        else:
+            self._tool_registry = tool_registry
 
     def run(self, messages: List[Dict[str, Any]]) -> None:
         """Run the agent conversation loop.
@@ -163,10 +178,8 @@ class AgentLoop:
             response: Provider response with tool calls
             messages: Message history list (modified in-place)
         """
-        from simple_agent.tools.tool_handlers import get_permission_aware_handlers
-
-        # Get permission-aware handlers
-        handlers = get_permission_aware_handlers(TOOL_HANDLERS)
+        # Get permission-aware handlers from tool registry
+        handlers = self._tool_registry.get_permission_aware_handlers()
 
         results = []
         used_todo = False

@@ -32,12 +32,13 @@ def reset_global_state():
         '_todo_manager', '_task_manager', '_background_manager',
         '_message_bus', '_teammate_manager', '_skill_loader',
         '_project_manager', '_session_manager',
-        '_provider', '_settings', '_permission_manager'
+        '_provider', '_settings', '_permission_manager',
+        '_tool_handler_registry',  # Added for new registry variable
     ]:
         if hasattr(tool_handlers, attr):
             setattr(tool_handlers, attr, None)
 
-    # Clear tool registry
+    # Clear tool registry (legacy)
     if hasattr(tool_handlers, '_tool_registry'):
         tool_handlers._tool_registry.clear()
 

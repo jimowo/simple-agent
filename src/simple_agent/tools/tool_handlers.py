@@ -7,19 +7,14 @@ DEPRECATED: The global state pattern in this module is deprecated.
 New code should use ToolHandlerRegistry from handler_registry.py instead.
 """
 
-from typing import Callable, Dict
+from typing import Callable, Dict, Optional
 
 from simple_agent.models.config import Settings
-from simple_agent.tools.base import ToolRegistry
-from simple_agent.tools.bash_tools import run_bash
-from simple_agent.tools.file_tools import edit_file, read_file, write_file
 from simple_agent.tools.handler_registry import ToolHandlerRegistry
 from simple_agent.tools.tool_definitions import TOOLS
 
-# Initialize global registry
-_tool_registry = ToolRegistry()
-
 # Placeholder for managers (will be set during initialization)
+# DEPRECATED: These global variables are maintained for backward compatibility only
 _todo_manager = None
 _task_manager = None
 _background_manager = None
@@ -29,6 +24,8 @@ _skill_loader = None
 _provider = None
 _settings: Settings = None
 _permission_manager = None
+# ToolHandlerRegistry instance (created during initialization)
+_tool_handler_registry: Optional[ToolHandlerRegistry] = None
 
 
 def initialize_handlers(
@@ -42,10 +39,17 @@ def initialize_handlers(
     settings,
     permission_manager=None,
 ):
-    """Initialize handlers with manager instances."""
+    """Initialize handlers with manager instances.
+
+    DEPRECATED: This function initializes global state for backward compatibility.
+    New code should use ToolHandlerRegistry directly via dependency injection.
+
+    This function creates a ToolHandlerRegistry instance and initializes
+    the legacy global variables for backward compatibility.
+    """
     global _todo_manager, _task_manager, _background_manager
     global _message_bus, _teammate_manager, _skill_loader
-    global _provider, _settings, _permission_manager
+    global _provider, _settings, _permission_manager, _tool_handler_registry
 
     _todo_manager = todo_manager
     _task_manager = task_manager
@@ -57,110 +61,158 @@ def initialize_handlers(
     _settings = settings
     _permission_manager = permission_manager
 
+    # Create ToolHandlerRegistry for use in this module
+    if _tool_handler_registry is None:
+        from simple_agent.agent.context import AgentContext
 
-# Tool handler functions
+        # Build a minimal context for the registry
+        context = AgentContext(
+            settings=settings,
+            todo=todo_manager,
+            task_mgr=task_manager,
+            bg=background_manager,
+            bus=message_bus,
+            skill_loader=skill_loader,
+            teammate=teammate_manager,
+            project_mgr=None,  # Not needed for legacy handlers
+            session_mgr=None,  # Not needed for legacy handlers
+            provider=provider,
+        )
+        _tool_handler_registry = ToolHandlerRegistry(context, permission_manager)
+
+
+# Tool handler functions (delegates to ToolHandlerRegistry)
+def _ensure_registry() -> ToolHandlerRegistry:
+    """Ensure that the tool handler registry is initialized.
+
+    Returns:
+        ToolHandlerRegistry instance
+
+    Raises:
+        RuntimeError: If handlers have not been initialized
+    """
+    if _tool_handler_registry is None:
+        raise RuntimeError(
+            "Tool handlers not initialized. Call initialize_handlers() first."
+        )
+    return _tool_handler_registry
+
+
 def handle_bash(command: str) -> str:
-    return run_bash(command, _settings.workdir, _settings.bash_timeout)
+    """Handle bash command execution."""
+    return _ensure_registry().handle_bash(command)
 
 
 def handle_read_file(path: str, limit: int = None) -> str:
-    return read_file(path, limit)
+    """Handle file reading."""
+    return _ensure_registry().handle_read_file(path, limit)
 
 
 def handle_write_file(path: str, content: str) -> str:
-    return write_file(path, content)
+    """Handle file writing."""
+    return _ensure_registry().handle_write_file(path, content)
 
 
 def handle_edit_file(path: str, old_text: str, new_text: str) -> str:
-    return edit_file(path, old_text, new_text)
+    """Handle file editing."""
+    return _ensure_registry().handle_edit_file(path, old_text, new_text)
 
 
 def handle_todo_write(items: list) -> str:
-    return _todo_manager.update(items)
+    """Handle todo list updates."""
+    return _ensure_registry().handle_todo_write(items)
 
 
 def handle_task(prompt: str, agent_type: str = "Explore") -> str:
-    from simple_agent.agent.base import run_subagent
-
-    return run_subagent(_provider, prompt, agent_type)
+    """Handle subagent task delegation."""
+    return _ensure_registry().handle_task(prompt, agent_type)
 
 
 def handle_load_skill(name: str) -> str:
-    return _skill_loader.load(name)
+    """Handle skill loading."""
+    return _ensure_registry().handle_load_skill(name)
 
 
 def handle_compress() -> str:
-    return "Compressing..."
+    """Handle context compression."""
+    return _ensure_registry().handle_compress()
 
 
 def handle_background_run(command: str, timeout: int = None) -> str:
-    if timeout is None:
-        timeout = _settings.bash_timeout
-    return _background_manager.run(command, timeout)
+    """Handle background command execution."""
+    return _ensure_registry().handle_background_run(command, timeout)
 
 
 def handle_check_background(task_id: str = None) -> str:
-    return _background_manager.check(task_id)
+    """Handle background task status check."""
+    return _ensure_registry().handle_check_background(task_id)
 
 
 def handle_task_create(subject: str, description: str = "") -> str:
-    return _task_manager.create(subject, description)
+    """Handle task creation."""
+    return _ensure_registry().handle_task_create(subject, description)
 
 
 def handle_task_get(task_id: int) -> str:
-    return _task_manager.get(task_id)
+    """Handle task retrieval."""
+    return _ensure_registry().handle_task_get(task_id)
 
 
 def handle_task_update(
     task_id: int, status: str = None, add_blocked_by: list = None, add_blocks: list = None
 ) -> str:
-    return _task_manager.update(task_id, status, add_blocked_by, add_blocks)
+    """Handle task updates."""
+    return _ensure_registry().handle_task_update(task_id, status, add_blocked_by, add_blocks)
 
 
 def handle_task_list() -> str:
-    return _task_manager.list_all()
+    """Handle task listing."""
+    return _ensure_registry().handle_task_list()
 
 
 def handle_spawn_teammate(name: str, role: str, prompt: str) -> str:
-    return _teammate_manager.spawn(name, role, prompt)
+    """Handle teammate spawning."""
+    return _ensure_registry().handle_spawn_teammate(name, role, prompt)
 
 
 def handle_list_teammates() -> str:
-    return _teammate_manager.list_all()
+    """Handle teammate listing."""
+    return _ensure_registry().handle_list_teammates()
 
 
 def handle_send_message(to: str, content: str, msg_type: str = "message") -> str:
-    return _message_bus.send("lead", to, content, msg_type)
+    """Handle message sending."""
+    return _ensure_registry().handle_send_message(to, content, msg_type)
 
 
 def handle_read_inbox() -> str:
-    import json
-
-    return json.dumps(_message_bus.read_inbox("lead"), indent=2)
+    """Handle inbox reading."""
+    return _ensure_registry().handle_read_inbox()
 
 
 def handle_broadcast(content: str) -> str:
-    return _message_bus.broadcast("lead", content, _teammate_manager.member_names())
+    """Handle message broadcasting."""
+    return _ensure_registry().handle_broadcast(content)
 
 
 def handle_shutdown_request(teammate: str) -> str:
-    from simple_agent.agent.base import handle_shutdown_request
-
-    return handle_shutdown_request(_message_bus, teammate)
+    """Handle shutdown requests."""
+    return _ensure_registry().handle_shutdown_request(teammate)
 
 
 def handle_plan_approval(request_id: str, approve: bool, feedback: str = "") -> str:
-    from simple_agent.agent.base import handle_plan_review
-
-    return handle_plan_review(_message_bus, request_id, approve, feedback)
+    """Handle plan approval/rejection."""
+    return _ensure_registry().handle_plan_approval(request_id, approve, feedback)
 
 
 def handle_idle() -> str:
-    return "Lead does not idle."
+    """Handle idle state."""
+    return _ensure_registry().handle_idle()
 
 
 def handle_claim_task(task_id: int) -> str:
-    return _task_manager.claim(task_id, "lead")
+    """Handle task claiming."""
+    return _ensure_registry().handle_claim_task(task_id)
 
 
 # Tool handlers dictionary
@@ -195,9 +247,8 @@ TOOL_HANDLERS: Dict[str, Callable] = {
 def get_permission_aware_handlers(handlers: Dict[str, Callable] = None) -> Dict[str, Callable]:
     """Get tool handlers with permission checking.
 
-    This function wraps handlers that require permission with permission checks.
-    It follows the Single Responsibility Principle (SRP) by only handling
-    the wrapping logic, delegating permission logic to PermissionManager.
+    DEPRECATED: This function is maintained for backward compatibility.
+    New code should use ToolHandlerRegistry.get_permission_aware_handlers() instead.
 
     Args:
         handlers: Optional base handlers dict (defaults to TOOL_HANDLERS)
@@ -208,40 +259,9 @@ def get_permission_aware_handlers(handlers: Dict[str, Callable] = None) -> Dict[
     if handlers is None:
         handlers = TOOL_HANDLERS.copy()
 
-    # If no permission manager, return original handlers
-    if _permission_manager is None:
-        return handlers
-
-    # Import permission wrapper
-    from simple_agent.permissions.wrapper import PermissionDeniedError, wrap_with_permission
-
-    # Tools that require permission checking
-    permission_tools = {
-        "write_file": "high",
-        "bash": "medium",
-        "edit_file": "medium",
-    }
-
-    # Wrap handlers that require permission
-    result = handlers.copy()
-    for tool, risk_level in permission_tools.items():
-        if tool in result:
-            original_handler = result[tool]
-
-            def create_wrapped(handler, tool_name=tool, risk=risk_level):
-                def wrapped(**kwargs):
-                    try:
-                        return wrap_with_permission(
-                            tool_name, handler, _permission_manager, risk
-                        )(**kwargs)
-                    except PermissionDeniedError as e:
-                        return f"Permission denied: {e.reason}"
-
-                return wrapped
-
-            result[tool] = create_wrapped(original_handler)
-
-    return result
+    # Delegate to ToolHandlerRegistry
+    registry = _ensure_registry()
+    return registry.get_permission_aware_handlers()
 
 
 # Re-export for backward compatibility

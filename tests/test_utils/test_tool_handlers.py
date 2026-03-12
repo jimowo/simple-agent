@@ -117,10 +117,10 @@ class TestHandleBash:
 
     def test_handle_bash_requires_initialization(self):
         """Test that handle_bash requires initialization."""
-        # Reset globals to None
-        tool_handlers._settings = None
+        # Reset tool handler registry to None
+        tool_handlers._tool_handler_registry = None
 
-        with pytest.raises(AttributeError):
+        with pytest.raises(RuntimeError, match="Tool handlers not initialized"):
             tool_handlers.handle_bash("ls")
 
 
@@ -128,12 +128,12 @@ class TestHandleBash:
 class TestHandleFileTools:
     """Test file tool handlers."""
 
-    def test_handle_read_file(self, sample_files):
+    def test_handle_read_file(self, initialized_context, sample_files):
         """Test handle_read_file function."""
         result = tool_handlers.handle_read_file(str(sample_files["test.txt"]))
         assert "Hello, World!" in result
 
-    def test_handle_write_file(self, temp_workspace):
+    def test_handle_write_file(self, initialized_context, temp_workspace):
         """Test handle_write_file function."""
         path = temp_workspace / "new.txt"
         result = tool_handlers.handle_write_file(str(path), "New content")
@@ -141,7 +141,7 @@ class TestHandleFileTools:
         assert "success" in result.lower() or "wrote" in result.lower()
         assert path.exists()
 
-    def test_handle_edit_file(self, sample_files):
+    def test_handle_edit_file(self, initialized_context, sample_files):
         """Test handle_edit_file function."""
         path = sample_files["test.txt"]
         result = tool_handlers.handle_edit_file(str(path), "Hello, World!", "Goodbye, World!")
@@ -169,17 +169,23 @@ class TestHandleTodo:
 class TestGetPermissionAwareHandlers:
     """Test permission-aware handler wrapping."""
 
-    def test_returns_original_when_no_permission_manager(self):
+    def test_returns_original_when_no_permission_manager(self, initialized_context):
         """Test that original handlers are returned when no permission manager."""
-        tool_handlers._permission_manager = None
-
+        # initialized_context creates a registry without permission manager
         result = get_permission_aware_handlers()
 
-        assert result is TOOL_HANDLERS or result == TOOL_HANDLERS
+        # Should return handlers from registry
+        assert isinstance(result, dict)
+        assert "bash" in result
+        assert "write_file" in result
 
-    def test_wraps_permission_tools(self, mock_permission_manager):
+    def test_wraps_permission_tools(self, initialized_context, mock_permission_manager):
         """Test that permission-required tools are wrapped."""
-        tool_handlers._permission_manager = mock_permission_manager
+        # Update the registry with permission manager
+        from simple_agent.tools.handler_registry import ToolHandlerRegistry
+
+        registry = ToolHandlerRegistry(initialized_context, mock_permission_manager)
+        tool_handlers._tool_handler_registry = registry
 
         result = get_permission_aware_handlers()
 

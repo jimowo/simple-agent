@@ -62,9 +62,10 @@ class ToolHandlerRegistry:
 
     def handle_task(self, prompt: str, agent_type: str = "Explore") -> str:
         """Handle subagent task delegation."""
-        from simple_agent.agent.subagent import run_subagent
+        from simple_agent.agent.subagent import SubAgentRunner
 
-        return run_subagent(self._context.provider, prompt, agent_type)
+        runner = SubAgentRunner(self._context.provider, tool_registry=self)
+        return runner.run(prompt, agent_type)
 
     def handle_load_skill(self, name: str) -> str:
         """Handle skill loading."""
@@ -148,13 +149,16 @@ class ToolHandlerRegistry:
         """Handle task claiming."""
         return self._context.task_mgr.claim(task_id, "lead")
 
-    def get_handlers(self) -> Dict[str, Callable]:
-        """Get all tool handlers as a dictionary.
+    def get_handlers(self, tool_names: list = None) -> Dict[str, Callable]:
+        """Get tool handlers as a dictionary.
+
+        Args:
+            tool_names: Optional list of tool names to include (returns all if None)
 
         Returns:
             Dictionary mapping tool names to handler functions
         """
-        return {
+        all_handlers = {
             "bash": self.handle_bash,
             "read_file": self.handle_read_file,
             "write_file": self.handle_write_file,
@@ -180,17 +184,26 @@ class ToolHandlerRegistry:
             "claim_task": self.handle_claim_task,
         }
 
-    def get_permission_aware_handlers(self) -> Dict[str, Callable]:
+        if tool_names is None:
+            return all_handlers
+
+        # Filter to only requested tools
+        return {name: all_handlers[name] for name in tool_names if name in all_handlers}
+
+    def get_permission_aware_handlers(self, tool_names: list = None) -> Dict[str, Callable]:
         """Get tool handlers with permission checking.
 
         This method wraps handlers that require permission with permission checks.
         It follows the Single Responsibility Principle (SRP) by only handling
         the wrapping logic, delegating permission logic to PermissionManager.
 
+        Args:
+            tool_names: Optional list of tool names to include (returns all if None)
+
         Returns:
             Dictionary of tool names to wrapped handler functions
         """
-        handlers = self.get_handlers()
+        handlers = self.get_handlers(tool_names)
 
         # If no permission manager, return original handlers
         if self._permission_manager is None:
