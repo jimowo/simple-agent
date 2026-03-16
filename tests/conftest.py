@@ -25,6 +25,10 @@ def reset_global_state():
     # Reset service container
     reset_container()
 
+    # Reset logger state (loguru has global handlers)
+    from loguru import logger as global_logger
+    global_logger.remove()
+
     # Reset tool handlers globals
     from simple_agent.tools import tool_handlers
 
@@ -53,6 +57,10 @@ def reset_global_state():
 
     # Cleanup after test
     reset_container()
+
+    # Reset logger state after test
+    from loguru import logger as global_logger
+    global_logger.remove()
 
 
 @pytest.fixture(autouse=True)

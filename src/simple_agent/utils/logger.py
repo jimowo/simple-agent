@@ -99,6 +99,21 @@ def setup_logger(
         )
 
 
+def shutdown_logger() -> None:
+    """Properly shutdown the logger by completing all pending writes.
+
+    This function ensures all handlers are flushed and closed properly.
+    It should be called before application exit or when switching
+    logger configurations.
+
+    Example:
+        >>> from simple_agent.utils.logger import shutdown_logger
+        >>> logger.info("Final message")
+        >>> shutdown_logger()
+    """
+    logger.complete()
+
+
 def get_logger(name: str = None):
     """Get a logger instance with the specified name.
 
@@ -156,6 +171,7 @@ class LoggerMixin:
 __all__ = [
     "logger",
     "setup_logger",
+    "shutdown_logger",
     "get_logger",
     "LoggerMixin",
 ]

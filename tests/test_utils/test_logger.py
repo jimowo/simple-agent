@@ -6,6 +6,7 @@ from unittest.mock import patch, MagicMock
 
 from simple_agent.utils.logger import (
     setup_logger,
+    shutdown_logger,
     get_logger,
     LoggerMixin,
     logger,
@@ -151,6 +152,7 @@ class TestLoggerOutput:
 
     def test_logger_output_to_file(self, temp_workspace):
         """Test that logger writes to file."""
+        # Ensure clean state - remove all handlers first
         logger.remove()
 
         log_dir = temp_workspace / "logs"
@@ -158,19 +160,23 @@ class TestLoggerOutput:
 
         test_message = "File test message"
         logger.info(test_message)
-        logger.remove()  # This flushes handlers
+
+        # Use logger.complete() to flush all handlers synchronously
+        logger.complete()
 
         # Check that log file was created and contains message
-        # Note: Log file names include date, so we search for any .log file
-        import time
-        time.sleep(0.1)  # Small delay to ensure file is written
+        # Look specifically for the main log file (not error log)
+        main_log_files = list(log_dir.glob("simple_agent_*.log"))
 
-        log_files = list(log_dir.glob("*.log"))
-        if log_files:
-            # Read the most recent log file
-            log_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-            content = log_files[0].read_text(encoding='utf-8')
-            assert test_message in content
+        # Also check for any files in the log directory for debugging
+        all_files = list(log_dir.glob("*")) if log_dir.exists() else []
+
+        # Assert we found the main log file
+        assert main_log_files, f"No main log files found in {log_dir}. All files: {[f.name for f in all_files]}"
+
+        # Read the main log file (there should be only one)
+        content = main_log_files[0].read_text(encoding='utf-8')
+        assert test_message in content, f"Expected '{test_message}' in log file {main_log_files[0]}, but got: {content}"
 
     def test_logger_error_to_file(self, temp_workspace):
         """Test that errors are written to error log file."""
@@ -181,7 +187,7 @@ class TestLoggerOutput:
 
         error_message = "Test error message"
         logger.error(error_message)
-        logger.remove()  # Flush handlers
+        shutdown_logger()  # Properly shutdown and flush all handlers
 
         # Check error log file
         error_logs = list(log_dir.glob("error*.log"))
