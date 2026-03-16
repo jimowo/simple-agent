@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic_settings import BaseSettings
 
 from simple_agent.exceptions import InvalidProviderError
@@ -31,8 +31,7 @@ class ProviderConfig(BaseModel):
     base_url: Optional[str] = None
     models: list = Field(default_factory=list)
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class Settings(BaseSettings):
@@ -100,9 +99,7 @@ class Settings(BaseSettings):
     serpapi_api_key: Optional[str] = Field(default=None, alias="SERPAPI_API_KEY")
     web_timeout: int = Field(default=20, alias="WEB_TIMEOUT")
 
-    class Config:
-        extra = "allow"
-        env_file = ".env"
+    model_config = ConfigDict(extra="allow", env_file=".env")
 
     def get_active_provider(self) -> str:
         """Get the active provider name (runtime override or default).

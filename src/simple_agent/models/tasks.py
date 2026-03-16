@@ -2,7 +2,7 @@
 
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class TodoItem(BaseModel):
@@ -41,8 +41,7 @@ class Task(BaseModel):
     blocked_by: List[int] = Field(default_factory=list, alias="blockedBy")
     blocks: List[int] = Field(default_factory=list)
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class InboxMessage(BaseModel):
@@ -54,5 +53,4 @@ class InboxMessage(BaseModel):
     timestamp: float
     extra: Optional[dict] = None
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
