@@ -59,9 +59,10 @@ class AgentLoop:
         1. Compress messages if needed
         2. Process background notifications
         3. Process inbox messages
-        4. Call LLM
-        5. Execute tools if requested
-        6. Repeat until no tool use
+        4. Retrieve and inject relevant memories
+        5. Call LLM
+        6. Execute tools if requested
+        7. Repeat until no tool use
 
         Args:
             messages: Message history list (modified in-place)
@@ -70,6 +71,7 @@ class AgentLoop:
             self._compress_if_needed(messages)
             self._process_background_notifications(messages)
             self._process_inbox(messages)
+            self._retrieve_and_inject_memory(messages)
 
             response = self._call_llm(messages)
             messages.append({"role": "assistant", "content": response.content})
@@ -107,6 +109,7 @@ class AgentLoop:
                         current_session.session_id,
                         self._ctx.session_mgr,
                         create_branch=False,  # Can be made configurable later
+                        memory_mgr=getattr(self._ctx, "memory_mgr", None),
                     )
                     print(f"[Session saved: {current_session.session_id[:8]}...]")
                     return
@@ -119,6 +122,7 @@ class AgentLoop:
                 self._ctx.provider,
                 self._ctx.settings.model_id or "default",
                 self._ctx.settings.transcript_dir,
+                memory_mgr=getattr(self._ctx, "memory_mgr", None),
             )
 
     def _process_background_notifications(
@@ -154,6 +158,88 @@ class AgentLoop:
                 {"role": "user", "content": f"<inbox>{json.dumps(inbox, indent=2)}</inbox>"}
             )
             messages.append({"role": "assistant", "content": "Noted inbox messages."})
+
+    def _retrieve_and_inject_memory(self, messages: List[Dict[str, Any]]) -> None:
+        """Retrieve relevant memories and inject into conversation.
+
+        This method analyzes the last user message and retrieves relevant
+        memories from the long-term memory system, injecting them as
+        context for the LLM.
+
+        Args:
+            messages: Message history list (modified in-place)
+        """
+        # Check if memory manager is available
+        memory_mgr = getattr(self._ctx, "memory_mgr", None)
+        if not memory_mgr:
+            return
+
+        # Get the last user message for context
+        last_user_msg = None
+        for msg in reversed(messages):
+            if msg.get("role") == "user":
+                last_user_msg = msg
+                break
+
+        if not last_user_msg:
+            return
+
+        # Extract query text from the message
+        query_text = last_user_msg.get("content", "")
+        if isinstance(query_text, list):
+            # Handle structured content
+            text_parts = []
+            for part in query_text:
+                if isinstance(part, dict):
+                    if part.get("type") == "text":
+                        text_parts.append(part.get("text", ""))
+                elif isinstance(part, str):
+                    text_parts.append(part)
+            query_text = " ".join(text_parts)
+
+        if not query_text or len(query_text.strip()) < 10:
+            return
+
+        try:
+            from simple_agent.models.memory import MemoryQuery
+
+            # Get current session info for filtering
+            current_session = self._ctx.session_mgr.get_current_session()
+
+            # Create memory query
+            memory_query = MemoryQuery(
+                query_text=query_text[:500],  # Limit query length
+                project_id=current_session.project_id if current_session else None,
+                limit=5,  # Retrieve top 5 relevant memories
+                threshold=0.6,  # Similarity threshold
+            )
+
+            # Retrieve memories
+            result = memory_mgr.retrieve(memory_query)
+
+            if result.entries:
+                # Format memories for injection
+                memory_context = "<relevant_memory>\n"
+                for entry in result.entries:
+                    memory_context += f"- {entry.content}\n"
+                memory_context += "</relevant_memory>\n"
+
+                # Inject as a system message before the last user message
+                # This ensures the LLM has context without modifying user input
+                memory_msg = {
+                    "role": "system",
+                    "content": memory_context
+                }
+
+                # Insert before the last message
+                messages.insert(-1, memory_msg)
+                logger.debug(
+                    f"[AgentLoop] Injected {len(result.entries)} memories "
+                    f"(query: {query_text[:50]}...)"
+                )
+
+        except Exception as e:
+            logger.warning(f"[AgentLoop] Failed to retrieve memories: {e}")
 
     def _call_llm(self, messages: List[Dict[str, Any]]) -> Any:
         """Call the LLM provider.

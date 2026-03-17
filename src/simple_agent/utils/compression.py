@@ -3,7 +3,9 @@
 import json
 import time
 from pathlib import Path
-from typing import Any, List
+from typing import Any, List, Optional
+
+from loguru import logger
 
 from simple_agent.models.config import Settings
 from simple_agent.models.projects import SessionMessage
@@ -42,7 +44,13 @@ def microcompact(messages: List[Any]) -> None:
             part["content"] = "[cleared]"
 
 
-def auto_compact(messages: List[Any], provider, model: str, transcript_dir: Path = None) -> List[Any]:
+def auto_compact(
+    messages: List[Any],
+    provider,
+    model: str,
+    transcript_dir: Path = None,
+    memory_mgr: Optional[Any] = None,
+) -> List[Any]:
     """
     Compress conversation by saving transcript and generating summary.
 
@@ -51,6 +59,7 @@ def auto_compact(messages: List[Any], provider, model: str, transcript_dir: Path
         provider: AI provider instance
         model: Model ID to use for summarization
         transcript_dir: Directory for transcripts (uses Settings.transcript_dir if None)
+        memory_mgr: Optional MemoryManager for saving compressed messages
 
     Returns:
         New message list with summary
@@ -77,6 +86,9 @@ def auto_compact(messages: List[Any], provider, model: str, transcript_dir: Path
         if isinstance(c, dict) and c.get("type") == "text":
             summary = c.get("text", "")
             break
+
+    # Save messages to memory before returning
+    save_messages_to_memory(messages, None, None, memory_mgr)
 
     return [
         {"role": "user", "content": f"[Compressed. Transcript: {path}]\n{summary}"},
@@ -129,6 +141,7 @@ def session_aware_compact(
     session_id: str,
     session_mgr,
     create_branch: bool = False,
+    memory_mgr: Optional[Any] = None,
 ) -> List[Any]:
     """
     Compress conversation and save to session, optionally creating a branch.
@@ -137,7 +150,8 @@ def session_aware_compact(
     1. Saves the full conversation to the session JSONL file (transcript)
     2. Generates an AI summary
     3. Optionally creates a new session branch for the compressed conversation
-    4. Returns compressed messages with summary
+    4. Saves messages to long-term memory
+    5. Returns compressed messages with summary
 
     Args:
         messages: Current message history
@@ -147,6 +161,7 @@ def session_aware_compact(
         session_id: Current session ID
         session_mgr: SessionManager instance
         create_branch: If True, create a new session branch for compressed conversation
+        memory_mgr: Optional MemoryManager for saving compressed messages
 
     Returns:
         New message list with summary
@@ -192,7 +207,10 @@ def session_aware_compact(
             session_mgr.append_message(project_id, new_session.session_id, note_msg)
             print(f"[Created branch: {new_session.session_id[:8]}...]")
 
-    # 4. Return compressed messages
+    # 4. Save messages to long-term memory
+    save_messages_to_memory(messages, project_id, session_id, memory_mgr)
+
+    # 5. Return compressed messages
     return [
         {"role": "user", "content": f"[Compressed. Transcript: {transcript_path}]\n{summary}"},
         {"role": "assistant", "content": "Understood. Continuing with summary context."},
@@ -229,3 +247,69 @@ def get_session_history(project_id: str, session_id: str, session_mgr) -> List[A
                     continue
 
     return messages
+
+
+def save_messages_to_memory(
+    messages: List[Any],
+    project_id: str,
+    session_id: str,
+    memory_mgr: Optional[Any] = None,
+) -> None:
+    """Save compressed messages to memory system.
+
+    This function extracts user and assistant messages from the conversation
+    and saves them to the long-term memory system for future retrieval.
+
+    Args:
+        messages: Message history to save
+        project_id: Project ID
+        session_id: Session ID
+        memory_mgr: Optional MemoryManager instance (if None, skips saving)
+    """
+    if memory_mgr is None:
+        logger.debug("[Compression] No memory_mgr provided, skipping memory save")
+        return
+
+    saved_count = 0
+
+    for msg in messages:
+        if msg.get("role") in ("user", "assistant"):
+            content = msg.get("content", "")
+
+            # Handle list content (tool results, etc.)
+            if isinstance(content, list):
+                # Extract text content
+                text_parts = []
+                for c in content:
+                    if isinstance(c, dict):
+                        if c.get("type") == "text":
+                            text_parts.append(c.get("text", ""))
+                        elif c.get("type") == "tool_result":
+                            # Skip tool results for memory
+                            continue
+                    elif isinstance(c, str):
+                        text_parts.append(c)
+                content = " ".join(text_parts)
+
+            # Skip empty or system content
+            if not content or not content.strip():
+                continue
+
+            # Skip system messages and very short messages
+            if len(content.strip()) < 10:
+                continue
+
+            try:
+                memory_mgr.write(
+                    content=content.strip(),
+                    entry_type="episodic",
+                    project_id=project_id,
+                    session_id=session_id,
+                    importance="medium",
+                    source="compression"
+                )
+                saved_count += 1
+            except Exception as e:
+                logger.warning(f"[Compression] Failed to save message to memory: {e}")
+
+    logger.info(f"[Compression] Saved {saved_count} messages to memory")

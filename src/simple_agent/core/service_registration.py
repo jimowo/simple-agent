@@ -25,6 +25,8 @@ def register_managers(container: ServiceContainer) -> None:
     # Import here to avoid circular imports
     from simple_agent.interfaces.managers import (
         BackgroundManager,
+        MemoryEncoder,
+        MemoryManager,
         MessageBus,
         ProjectManager,
         SessionManager,
@@ -94,6 +96,18 @@ def register_managers(container: ServiceContainer) -> None:
         lambda c: SessionManagerImpl(settings=c.resolve(Settings)),
     )
 
+    # MemoryEncoder - depends on Settings
+    container.register_transient(
+        MemoryEncoder,
+        lambda c: _create_memory_encoder(c.resolve(Settings)),
+    )
+
+    # MemoryManager - depends on Settings, MemoryEncoder
+    container.register_singleton(
+        MemoryManager,
+        lambda c: _create_memory_manager(c.resolve(Settings), c.resolve(MemoryEncoder)),
+    )
+
 
 def register_providers(container: ServiceContainer) -> None:
     """Register provider-related services with the container.
@@ -146,6 +160,51 @@ def _create_provider(settings: Settings) -> BaseProvider:
         base_url=provider_config.base_url,
         model=settings.model_id or None,
     )
+
+
+def _create_memory_encoder(settings: Settings):
+    """Create a memory encoder instance from settings.
+
+    Args:
+        settings: Application settings
+
+    Returns:
+        Encoder instance or None if memory is disabled
+    """
+    if not settings.memory_enabled:
+        return None
+
+    from simple_agent.managers.encoders import MemoryEncoderFactory
+
+    try:
+        return MemoryEncoderFactory.create(settings)
+    except Exception as e:
+        from loguru import logger
+        logger.warning(f"Failed to create memory encoder: {e}")
+        return None
+
+
+def _create_memory_manager(settings: Settings, encoder):
+    """Create a memory manager instance from settings.
+
+    Args:
+        settings: Application settings
+        encoder: Memory encoder instance (may be None)
+
+    Returns:
+        Memory instance (IMemory) or None if memory is disabled
+    """
+    if not settings.memory_enabled:
+        return None
+
+    from simple_agent.managers.memory import MemoryFactory
+
+    try:
+        return MemoryFactory.create(settings, encoder)
+    except Exception as e:
+        from loguru import logger
+        logger.warning(f"Failed to create memory manager: {e}")
+        return None
 
 
 # Utility functions for getting service instances

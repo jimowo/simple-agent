@@ -24,6 +24,10 @@ dev = [
     "pytest-asyncio>=0.21.0",
     "ruff>=0.1.0",
 ]
+memory = [
+    "chromadb>=0.4.0",
+    "openai>=1.0.0",
+]
 openai = [
     "openai>=1.0.0",
 ]
@@ -35,6 +39,7 @@ groq = [
 ]
 all = [
     "simple-agent[dev]",
+    "simple-agent[memory]",
     "simple-agent[openai]",
     "simple-agent[gemini]",
     "simple-agent[groq]",

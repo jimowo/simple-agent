@@ -131,6 +131,23 @@ class Settings(BaseSettings):
     # Bash settings
     bash_timeout: int = Field(default=120, alias="BASH_TIMEOUT")
 
+    # Memory system settings
+    memory_enabled: bool = Field(default=True, alias="MEMORY_ENABLED")
+    memory_backend: str = Field(default="chroma", alias="MEMORY_BACKEND")
+    memory_dir: Path = Field(
+        default_factory=lambda: Path.cwd() / ".simple" / "memory",
+        alias="MEMORY_DIR"
+    )
+    # OpenAI Embeddings configuration
+    memory_encoder: str = Field(default="openai", alias="MEMORY_ENCODER")
+    memory_openai_base_url: Optional[str] = Field(default=None, alias="MEMORY_OPENAI_BASE_URL")
+    memory_openai_api_key: Optional[str] = Field(default=None, alias="MEMORY_OPENAI_API_KEY")
+    memory_openai_model: str = Field(default="text-embedding-3-small", alias="MEMORY_OPENAI_MODEL")
+    memory_openai_embedding_dim: int = Field(default=1536, alias="MEMORY_OPENAI_EMBEDDING_DIM")
+    # Forgetting policy
+    memory_max_entries: int = Field(default=10000, ge=1, alias="MEMORY_MAX_ENTRIES")
+    memory_forget_policy: str = Field(default="lru", alias="MEMORY_FORGET_POLICY")
+
     # Search API settings
     search_api: str = Field(default="duckduckgo", alias="SEARCH_API")
     google_search_api_key: Optional[str] = Field(default=None, alias="GOOGLE_SEARCH_API_KEY")

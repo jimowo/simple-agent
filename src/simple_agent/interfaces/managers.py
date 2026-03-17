@@ -475,3 +475,246 @@ class SessionManager(Protocol):
             session: Session to set as current
         """
         ...
+
+
+# Memory system placeholder types
+class _MemoryMetadata(Protocol):
+    """Placeholder for MemoryMetadata model."""
+    entry_id: str
+    entry_type: str
+    importance: str
+    confidence: float
+    embedding: "Optional[List[float]]"
+    version: int
+
+
+class _MemoryEntry(Protocol):
+    """Placeholder for MemoryEntry model."""
+    content: str
+    metadata: "_MemoryMetadata"
+
+
+class _MemoryQuery(Protocol):
+    """Placeholder for MemoryQuery model."""
+    query_text: str
+    limit: int
+    threshold: float
+
+
+class _MemoryResult(Protocol):
+    """Placeholder for MemoryResult model."""
+    entries: "List[_MemoryEntry]"
+    total_found: int
+
+
+class MemoryEncoder(Protocol):
+    """Interface for encoding text to vector embeddings."""
+
+    def encode(self, text: str) -> "List[float]":
+        """Encode text to vector embedding.
+
+        Args:
+            text: Text to encode
+
+        Returns:
+            Vector embedding as list of floats
+        """
+        ...
+
+    def encode_batch(self, texts: "List[str]") -> "List[List[float]]":
+        """Encode multiple texts to vector embeddings.
+
+        Args:
+            texts: List of texts to encode
+
+        Returns:
+            List of vector embeddings
+        """
+        ...
+
+
+class MemoryBackend(Protocol):
+    """Interface for memory storage backends."""
+
+    def store(self, entry: "_MemoryEntry") -> bool:
+        """Store a memory entry.
+
+        Args:
+            entry: Entry to store
+
+        Returns:
+            True if successful
+        """
+        ...
+
+    def load(self, entry_id: str) -> "Optional[_MemoryEntry]":
+        """Load a memory entry by ID.
+
+        Args:
+            entry_id: Entry ID to load
+
+        Returns:
+            MemoryEntry if found, None otherwise
+        """
+        ...
+
+    def search(
+        self,
+        query_vector: "List[float]",
+        limit: int,
+        threshold: float
+    ) -> "List[_MemoryEntry]":
+        """Search for similar entries by vector.
+
+        Args:
+            query_vector: Query embedding vector
+            limit: Maximum results
+            threshold: Minimum similarity threshold
+
+        Returns:
+            List of similar MemoryEntry instances
+        """
+        ...
+
+    def delete(self, entry_id: str) -> bool:
+        """Delete a memory entry.
+
+        Args:
+            entry_id: Entry ID to delete
+
+        Returns:
+            True if deleted
+        """
+        ...
+
+
+class MemoryManager(Protocol):
+    """Interface for memory management and retrieval.
+
+    This interface matches the IMemory abstract class from
+    simple_agent.managers.memory.
+    """
+
+    def write(
+        self,
+        content: str,
+        entry_type: str,
+        **kwargs
+    ) -> "_MemoryEntry":
+        """Write a new memory entry.
+
+        Args:
+            content: Memory content
+            entry_type: Type of memory (episodic, semantic, procedural)
+            **kwargs: Additional metadata fields
+
+        Returns:
+            Created MemoryEntry
+        """
+        ...
+
+    def retrieve(self, query: "_MemoryQuery") -> "_MemoryResult":
+        """Retrieve relevant memories based on query.
+
+        Args:
+            query: Memory query with search parameters
+
+        Returns:
+            MemoryResult with matching entries
+        """
+        ...
+
+    def update(
+        self,
+        entry_id: str,
+        content: "Optional[str]" = None,
+        **metadata_updates
+    ) -> "Optional[_MemoryEntry]":
+        """Update an existing memory entry.
+
+        Handles conflict resolution based on version/timestamp.
+
+        Args:
+            entry_id: ID of entry to update
+            content: New content (if None, keeps existing)
+            **metadata_updates: Metadata fields to update
+
+        Returns:
+            Updated MemoryEntry or None if not found
+        """
+        ...
+
+    def delete(self, entry_id: str) -> bool:
+        """Delete a memory entry.
+
+        Args:
+            entry_id: ID of entry to delete
+
+        Returns:
+            True if deleted, False if not found
+        """
+        ...
+
+    def forget(self, policy: "Dict[str, Any]") -> int:
+        """Apply forgetting policy to clean up old/unimportant memories.
+
+        Args:
+            policy: Forgetting policy configuration
+
+        Returns:
+            Number of entries deleted
+        """
+        ...
+
+    def get_entry(self, entry_id: str) -> "Optional[_MemoryEntry]":
+        """Get a specific memory entry by ID.
+
+        Args:
+            entry_id: Entry ID to retrieve
+
+        Returns:
+            MemoryEntry if found, None otherwise
+        """
+        ...
+
+    def list_entries(
+        self,
+        project_id: "Optional[str]" = None,
+        entry_type: "Optional[str]" = None,
+        limit: "Optional[int]" = None,
+    ) -> "List[_MemoryEntry]":
+        """List memory entries with optional filters.
+
+        Args:
+            project_id: Filter by project ID
+            entry_type: Filter by entry type
+            limit: Maximum number of entries to return
+
+        Returns:
+            List of MemoryEntry instances
+        """
+        ...
+
+    def clear(self) -> int:
+        """Clear all memory entries.
+
+        Returns:
+            Number of entries cleared
+        """
+        ...
+
+    def count(self) -> int:
+        """Get total number of memory entries.
+
+        Returns:
+            Total count of entries
+        """
+        ...
+
+    def get_info(self) -> "Dict[str, Any]":
+        """Get memory system information.
+
+        Returns:
+            Dictionary with memory system info (type, backend, config, etc.)
+        """
+        ...

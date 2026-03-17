@@ -5,7 +5,7 @@ needed by the Agent, following the Dependency Inversion Principle (DIP).
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from simple_agent.models.config import Settings
 from simple_agent.providers.base import BaseProvider
@@ -13,6 +13,7 @@ from simple_agent.providers.base import BaseProvider
 if TYPE_CHECKING:
     from simple_agent.interfaces.managers import (
         BackgroundManager,
+        MemoryManager,
         MessageBus,
         ProjectManager,
         SessionManager,
@@ -42,6 +43,7 @@ class AgentContext:
         teammate: Teammate manager instance
         project_mgr: Project manager instance
         session_mgr: Session manager instance
+        memory_mgr: Memory manager instance (optional)
         provider: AI provider instance
     """
 
@@ -54,6 +56,7 @@ class AgentContext:
     teammate: "TeammateManager"
     project_mgr: "ProjectManager"
     session_mgr: "SessionManager"
+    memory_mgr: Optional["MemoryManager"]
     provider: BaseProvider
 
     @property
@@ -87,6 +90,7 @@ Skills available:
         from simple_agent.core.service_registration import _create_provider
         from simple_agent.interfaces.managers import (
             BackgroundManager,
+            MemoryManager,
             MessageBus,
             ProjectManager,
             SessionManager,
@@ -104,6 +108,13 @@ Skills available:
         # Resolve all dependencies
         provider = _create_provider(settings)
 
+        # Resolve MemoryManager (may be None if disabled)
+        memory_mgr = None
+        try:
+            memory_mgr = container.resolve(MemoryManager)
+        except Exception:
+            pass  # Memory manager is optional
+
         return cls(
             settings=settings,
             todo=container.resolve(TodoManager),
@@ -114,5 +125,6 @@ Skills available:
             teammate=container.resolve(TeammateManager),
             project_mgr=container.resolve(ProjectManager),
             session_mgr=container.resolve(SessionManager),
+            memory_mgr=memory_mgr,
             provider=provider,
         )
