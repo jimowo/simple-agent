@@ -5,35 +5,26 @@ from pathlib import Path
 
 from simple_agent.utils.constants import MAX_BASH_OUTPUT
 from simple_agent.utils.encoding import decode_output, get_system_encoding
-from simple_agent.utils.safety import is_dangerous_command
 
 
-def run_bash(command: str, workdir: Path = None, timeout: int = 120, _skip_safety_check: bool = False) -> str:
+def run_bash(command: str, workdir: Path = None, timeout: int = 120) -> str:
     """
     Run a bash command in the workspace.
 
-    Security: Permission checking is primarily handled by the PermissionManager
-    through the permission-aware wrapper. However, this function retains a
-    safety check for backward compatibility and direct calls.
-
-    The _skip_safety_check parameter should only be set by the permission wrapper
-    when it has already performed security checks.
+    Security: Permission checking and dangerous command detection are handled
+    by the PermissionManager through the permission-aware wrapper. This function
+    only executes the command after all security checks have passed.
 
     Args:
         command: Command to execute
         workdir: Working directory (uses Settings.workdir if None)
         timeout: Timeout in seconds
-        _skip_safety_check: Internal flag to skip safety check (used by permission wrapper)
 
     Returns:
         Command output
     """
     if workdir is None:
         workdir = Path.cwd()
-
-    # Safety check: only if not already checked by permission wrapper
-    if not _skip_safety_check and is_dangerous_command(command):
-        return "Error: Dangerous command blocked"
 
     # Use system encoding from utils.encoding
     system_encoding = get_system_encoding()

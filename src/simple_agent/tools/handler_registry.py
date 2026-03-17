@@ -4,6 +4,7 @@ This module provides a dependency injection-based approach to tool handlers,
 eliminating the need for global state.
 """
 
+import functools
 from typing import TYPE_CHECKING, Callable, Dict, Optional
 
 from loguru import logger
@@ -44,9 +45,9 @@ class ToolHandlerRegistry:
         self._context = context
         self._permission_manager = permission_manager
 
-    def handle_bash(self, command: str, _skip_safety_check: bool = False) -> str:
+    def handle_bash(self, command: str) -> str:
         """Handle bash command execution."""
-        return run_bash(command, self._context.settings.workdir, self._context.settings.bash_timeout, _skip_safety_check)
+        return run_bash(command, self._context.settings.workdir, self._context.settings.bash_timeout)
 
     def handle_read_file(self, path: str, limit: int = None) -> str:
         """Handle file reading."""
@@ -248,15 +249,8 @@ class ToolHandlerRegistry:
             logger.debug("[HANDLER_REGISTRY] No permission manager configured, returning original handlers")
             return handlers
 
-        # Import permission wrapper
-        from simple_agent.permissions.wrapper import PermissionDeniedError, wrap_with_permission
-
-        # Tools that require permission checking
-        permission_tools = {
-            "write_file": "high",
-            "bash": "medium",
-            "edit_file": "medium",
-        }
+        # Get permission tools from PermissionManager (centralized configuration)
+        permission_tools = self._permission_manager.get_permission_required_tools()
 
         logger.debug(f"[HANDLER_REGISTRY] Permission manager configured, tools requiring permission: {list(permission_tools.keys())}")
 
@@ -267,37 +261,49 @@ class ToolHandlerRegistry:
                 original_handler = result[tool]
                 logger.debug(f"[HANDLER_REGISTRY] Wrapping tool '{tool}' with permission check (risk_level={risk_level})")
 
-                # Special handling for bash tool to skip safety check in run_bash()
-                if tool == "bash":
-                    def create_bash_wrapped(handler, tool_name=tool, risk=risk_level):
-                        def wrapped(**kwargs):
-                            try:
-                                # Add flag to skip safety check in run_bash()
-                                kwargs["_skip_safety_check"] = True
-                                return wrap_with_permission(
-                                    tool_name, handler, self._permission_manager, risk
-                                )(**kwargs)
-                            except PermissionDeniedError as e:
-                                return f"Permission denied: {e.reason}"
-
-                        return wrapped
-
-                    result[tool] = create_bash_wrapped(original_handler)
-                else:
-                    def create_wrapped(handler, tool_name=tool, risk=risk_level):
-                        def wrapped(**kwargs):
-                            try:
-                                return wrap_with_permission(
-                                    tool_name, handler, self._permission_manager, risk
-                                )(**kwargs)
-                            except PermissionDeniedError as e:
-                                return f"Permission denied: {e.reason}"
-
-                        return wrapped
-
-                    result[tool] = create_wrapped(original_handler)
+                # Use functools.partial to properly bind closure variables
+                # This avoids the common closure variable capture issue
+                wrapped_handler = functools.partial(
+                    self._create_permission_wrapped,
+                    tool_name=tool,
+                    handler=original_handler,
+                    risk_level=risk_level,
+                )
+                result[tool] = wrapped_handler
             else:
                 logger.debug(f"[HANDLER_REGISTRY] Tool '{tool}' not in available handlers, skipping wrap")
 
         logger.debug(f"[HANDLER_REGISTRY] Permission-aware handlers ready, wrapped tools: {[t for t in permission_tools if t in result]}")
         return result
+
+    def _create_permission_wrapped(
+        self,
+        tool_name: str,
+        handler: Callable,
+        risk_level: str,
+        **kwargs
+    ) -> str:
+        """Create a permission-wrapped handler call.
+
+        This method is used with functools.partial to properly bind closure variables
+        and avoid the common closure variable capture issue in loops.
+
+        Args:
+            tool_name: Name of the tool being wrapped
+            handler: Original handler function
+            risk_level: Risk level for this tool
+            **kwargs: Arguments to pass to the handler
+
+        Returns:
+            Handler result or error message
+
+        Raises:
+            PermissionDeniedError: If permission is denied for the tool execution
+        """
+        from simple_agent.permissions.wrapper import wrap_with_permission
+
+        # Wrap and execute the handler with permission checking
+        wrapped = wrap_with_permission(
+            tool_name, handler, self._permission_manager, risk_level
+        )
+        return wrapped(**kwargs)

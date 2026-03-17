@@ -13,6 +13,8 @@ class OutputLimits:
     MAX_TOOL_OUTPUT = 50000  # Maximum characters for tool output
     MAX_SEARCH_RESULTS = 100  # Maximum number of search results to return
     MAX_WEB_CONTENT_LENGTH = 50000  # Maximum characters for web content
+    MAX_FILE_WRITE = 1000000  # Maximum characters for file write operations (1MB)
+    MAX_FILE_EDIT = 1000000  # Maximum characters for file edit operations (1MB)
 
 
 class LoopIterations:
@@ -35,3 +37,5 @@ MAX_FILE_READ = OutputLimits.MAX_FILE_READ
 MAX_TOOL_OUTPUT = OutputLimits.MAX_TOOL_OUTPUT
 MAX_SEARCH_RESULTS = OutputLimits.MAX_SEARCH_RESULTS
 MAX_WEB_CONTENT_LENGTH = OutputLimits.MAX_WEB_CONTENT_LENGTH
+MAX_FILE_WRITE = OutputLimits.MAX_FILE_WRITE
+MAX_FILE_EDIT = OutputLimits.MAX_FILE_EDIT

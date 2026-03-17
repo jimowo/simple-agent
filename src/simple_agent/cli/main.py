@@ -158,7 +158,6 @@ def _ask_permission(console: Console, status_controller: ConsoleStatusController
     Returns:
         Permission response
     """
-    from simple_agent.permissions.models import PermissionResponse, PermissionPolicy
     from simple_agent.permissions.manager import USE_PROMPT_TOOLKIT
 
     # Pause status display
@@ -183,7 +182,7 @@ def _prompt_with_prompt_toolkit(console: Console, request) -> PermissionResponse
     """Use prompt_toolkit for enhanced user interaction."""
     from prompt_toolkit import HTML, PromptSession
     from prompt_toolkit.completion import WordCompleter
-    from prompt_toolkit.validation import Validator, ValidationError
+    from prompt_toolkit.validation import ValidationError, Validator
     from rich.panel import Panel
     from rich.text import Text
 

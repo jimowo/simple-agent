@@ -175,6 +175,12 @@ def mock_permission_manager():
     manager = Mock(spec=PermissionManager)
     manager.check_permission.return_value = PermissionResponse(allowed=True)
     manager.get_session_policy.return_value = None
+    # Mock get_permission_required_tools to return a dict
+    manager.get_permission_required_tools.return_value = {
+        "write_file": "high",
+        "bash": "medium",
+        "edit_file": "medium",
+    }
     return manager
 
 

@@ -366,7 +366,7 @@ class PermissionManager:
         """
         from prompt_toolkit import HTML, PromptSession
         from prompt_toolkit.completion import WordCompleter
-        from prompt_toolkit.validation import Validator, ValidationError
+        from prompt_toolkit.validation import ValidationError, Validator
         from rich.console import Console
         from rich.panel import Panel
         from rich.text import Text
@@ -559,3 +559,18 @@ class PermissionManager:
             Dictionary of tool -> policy mappings
         """
         return self.session_policies.copy()
+
+    def get_permission_required_tools(self) -> Dict[str, str]:
+        """Get tools that require permission with their risk levels.
+
+        This method provides a centralized location for managing which tools
+        require permission checking and at what risk level.
+
+        Returns:
+            Dictionary mapping tool names to their risk levels
+        """
+        return {
+            "write_file": "high",
+            "bash": "medium",
+            "edit_file": "medium",
+        }
