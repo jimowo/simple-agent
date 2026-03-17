@@ -6,6 +6,8 @@ following SOLID principles for clean separation of concerns.
 
 from typing import Callable
 
+from loguru import logger
+
 from simple_agent.permissions.manager import PermissionManager
 
 
@@ -48,19 +50,28 @@ def wrap_with_permission(
     """
 
     def wrapped(**kwargs) -> str:
+        logger.debug(f"[PERMISSION_WRAPPER] Checking permission for tool='{tool_name}', risk_level='{risk_level}'")
+        logger.debug(f"[PERMISSION_WRAPPER] Tool parameters: {kwargs}")
+
         # Check permission before executing
         response = permission_manager.check_permission(
             tool=tool_name, params=kwargs, risk_level_override=risk_level
         )
 
+        logger.debug(f"[PERMISSION_WRAPPER] Permission check result: allowed={response.allowed}, policy={response.policy}")
+
         if not response.allowed:
+            logger.warning(f"[PERMISSION_WRAPPER] Permission DENIED for tool='{tool_name}', reason='{response.reason}'")
             raise PermissionDeniedError(
                 tool_name,
                 reason="Permission denied by user or policy",
             )
 
         # Execute original handler
-        return handler(**kwargs)
+        logger.debug(f"[PERMISSION_WRAPPER] Permission GRANTED, executing tool='{tool_name}'...")
+        result = handler(**kwargs)
+        logger.debug(f"[PERMISSION_WRAPPER] Tool '{tool_name}' execution completed, result length: {len(str(result))} chars")
+        return result
 
     return wrapped
 

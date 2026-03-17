@@ -15,9 +15,49 @@ from pydantic_settings import BaseSettings
 
 from simple_agent.exceptions import InvalidProviderError
 
-load_dotenv(override=True)
-if os.getenv("ANTHROPIC_BASE_URL"):
-    os.environ.pop("ANTHROPIC_AUTH_TOKEN", None)
+# Global flag to track if initialization has been done
+_config_initialized = False
+
+
+def initialize_config(load_dotenv_override: bool = True) -> None:
+    """Initialize configuration by loading environment variables.
+
+    This function should be called explicitly at application startup
+    rather than having side effects at module import time.
+
+    Args:
+        load_dotenv_override: Whether to override existing environment variables
+            with values from .env file. Defaults to True.
+
+    Example:
+        >>> from simple_agent.models.config import initialize_config
+        >>> initialize_config()
+        >>> settings = Settings()
+    """
+    global _config_initialized
+
+    # Load .env file
+    load_dotenv(override=load_dotenv_override)
+
+    # Handle Anthropic-specific environment variable conflict
+    # When ANTHROPIC_BASE_URL is set, remove ANTHROPIC_AUTH_TOKEN to avoid conflicts
+    if os.getenv("ANTHROPIC_BASE_URL"):
+        os.environ.pop("ANTHROPIC_AUTH_TOKEN", None)
+
+    _config_initialized = True
+
+
+def _ensure_config_initialized() -> None:
+    """Ensure configuration is initialized (for backward compatibility).
+
+    This function is called internally to maintain backward compatibility
+    with code that doesn't explicitly call initialize_config().
+
+    DEPRECATED: New code should call initialize_config() explicitly.
+    """
+    global _config_initialized
+    if not _config_initialized:
+        initialize_config()
 
 
 class ProviderConfig(BaseModel):
@@ -232,12 +272,29 @@ def create_settings(**kwargs) -> Settings:
     """Create Settings instance with optional overrides.
 
     This is a convenience factory function for creating Settings
-    with runtime overrides.
+    with runtime overrides. It ensures configuration is initialized
+    before creating the Settings instance.
 
     Args:
         **kwargs: Settings overrides
 
     Returns:
         Settings instance
+
+    Example:
+        >>> from simple_agent.models.config import create_settings
+        >>> settings = create_settings(workdir=Path("/custom/path"))
     """
+    # Ensure config is initialized (for backward compatibility)
+    _ensure_config_initialized()
     return Settings(**kwargs)
+
+
+# Public API exports
+__all__ = [
+    "ProviderConfig",
+    "Settings",
+    "ProviderConfigFactory",
+    "create_settings",
+    "initialize_config",
+]

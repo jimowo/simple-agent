@@ -6,6 +6,8 @@ eliminating the need for global state.
 
 from typing import TYPE_CHECKING, Callable, Dict, Optional
 
+from loguru import logger
+
 from simple_agent.tools.bash_tools import run_bash
 from simple_agent.tools.file_tools import edit_file, read_file, write_file
 from simple_agent.tools.search_tools import glob_files, grep_content
@@ -42,9 +44,9 @@ class ToolHandlerRegistry:
         self._context = context
         self._permission_manager = permission_manager
 
-    def handle_bash(self, command: str) -> str:
+    def handle_bash(self, command: str, _skip_safety_check: bool = False) -> str:
         """Handle bash command execution."""
-        return run_bash(command, self._context.settings.workdir, self._context.settings.bash_timeout)
+        return run_bash(command, self._context.settings.workdir, self._context.settings.bash_timeout, _skip_safety_check)
 
     def handle_read_file(self, path: str, limit: int = None) -> str:
         """Handle file reading."""
@@ -239,9 +241,11 @@ class ToolHandlerRegistry:
             Dictionary of tool names to wrapped handler functions
         """
         handlers = self.get_handlers(tool_names)
+        logger.debug(f"[HANDLER_REGISTRY] Getting permission-aware handlers, total handlers: {len(handlers)}")
 
         # If no permission manager, return original handlers
         if self._permission_manager is None:
+            logger.debug("[HANDLER_REGISTRY] No permission manager configured, returning original handlers")
             return handlers
 
         # Import permission wrapper
@@ -254,23 +258,46 @@ class ToolHandlerRegistry:
             "edit_file": "medium",
         }
 
+        logger.debug(f"[HANDLER_REGISTRY] Permission manager configured, tools requiring permission: {list(permission_tools.keys())}")
+
         # Wrap handlers that require permission
         result = handlers.copy()
         for tool, risk_level in permission_tools.items():
             if tool in result:
                 original_handler = result[tool]
+                logger.debug(f"[HANDLER_REGISTRY] Wrapping tool '{tool}' with permission check (risk_level={risk_level})")
 
-                def create_wrapped(handler, tool_name=tool, risk=risk_level):
-                    def wrapped(**kwargs):
-                        try:
-                            return wrap_with_permission(
-                                tool_name, handler, self._permission_manager, risk
-                            )(**kwargs)
-                        except PermissionDeniedError as e:
-                            return f"Permission denied: {e.reason}"
+                # Special handling for bash tool to skip safety check in run_bash()
+                if tool == "bash":
+                    def create_bash_wrapped(handler, tool_name=tool, risk=risk_level):
+                        def wrapped(**kwargs):
+                            try:
+                                # Add flag to skip safety check in run_bash()
+                                kwargs["_skip_safety_check"] = True
+                                return wrap_with_permission(
+                                    tool_name, handler, self._permission_manager, risk
+                                )(**kwargs)
+                            except PermissionDeniedError as e:
+                                return f"Permission denied: {e.reason}"
 
-                    return wrapped
+                        return wrapped
 
-                result[tool] = create_wrapped(original_handler)
+                    result[tool] = create_bash_wrapped(original_handler)
+                else:
+                    def create_wrapped(handler, tool_name=tool, risk=risk_level):
+                        def wrapped(**kwargs):
+                            try:
+                                return wrap_with_permission(
+                                    tool_name, handler, self._permission_manager, risk
+                                )(**kwargs)
+                            except PermissionDeniedError as e:
+                                return f"Permission denied: {e.reason}"
 
+                        return wrapped
+
+                    result[tool] = create_wrapped(original_handler)
+            else:
+                logger.debug(f"[HANDLER_REGISTRY] Tool '{tool}' not in available handlers, skipping wrap")
+
+        logger.debug(f"[HANDLER_REGISTRY] Permission-aware handlers ready, wrapped tools: {[t for t in permission_tools if t in result]}")
         return result

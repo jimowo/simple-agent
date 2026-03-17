@@ -8,6 +8,8 @@ This module implements the AgentLoop class following SOLID principles:
 import json
 from typing import Any, Dict, List, Optional
 
+from loguru import logger
+
 from simple_agent.agent.context import AgentContext
 from simple_agent.tools.handler_registry import ToolHandlerRegistry
 from simple_agent.tools.tool_definitions import TOOLS
@@ -181,19 +183,33 @@ class AgentLoop:
         # Get permission-aware handlers from tool registry
         handlers = self._tool_registry.get_permission_aware_handlers()
 
+        logger.debug(f"[TOOL_EXECUTION] Tool calls received: {len(response.tool_calls)} tools")
+        logger.debug(f"[TOOL_EXECUTION] Available handlers: {list(handlers.keys())}")
+
         results = []
         used_todo = False
         manual_compress = False
 
-        for tc in response.tool_calls:
+        for idx, tc in enumerate(response.tool_calls):
+            logger.debug(f"[TOOL_EXECUTION] [{idx+1}/{len(response.tool_calls)}] Tool: {tc.name}")
+            logger.debug(f"[TOOL_EXECUTION] [{idx+1}/{len(response.tool_calls)}] Input: {tc.input}")
+
             if tc.name == "compress":
                 manual_compress = True
 
             handler = handlers.get(tc.name)
-            try:
-                output = handler(**tc.input) if handler else f"Unknown tool: {tc.name}"
-            except Exception as e:
-                output = f"Error: {e}"
+
+            if handler is None:
+                logger.warning(f"[TOOL_EXECUTION] [{idx+1}/{len(response.tool_calls)}] Unknown tool: {tc.name}")
+                output = f"Unknown tool: {tc.name}"
+            else:
+                logger.debug(f"[TOOL_EXECUTION] [{idx+1}/{len(response.tool_calls)}] Handler found, executing...")
+                try:
+                    output = handler(**tc.input)
+                    logger.debug(f"[TOOL_EXECUTION] [{idx+1}/{len(response.tool_calls)}] Success. Output length: {len(str(output))} chars")
+                except Exception as e:
+                    logger.error(f"[TOOL_EXECUTION] [{idx+1}/{len(response.tool_calls)}] Error: {e}", exc_info=True)
+                    output = f"Error: {e}"
 
             print(f"> {tc.name}: {str(output)[:200]}")
             results.append(
@@ -236,6 +252,11 @@ def agent_loop(messages: list, agent) -> None:
     # Get context from agent (new Agent class has _ctx)
     if hasattr(agent, "_ctx"):
         context = agent._ctx
+        # Try to use the agent's existing tool registry and permission manager
+        tool_registry = getattr(agent, "_tool_registry", None)
+        permission_manager = getattr(agent, "_permission_manager", None)
+        logger.debug(f"[AGENT_LOOP] Using agent's tool_registry: {tool_registry is not None}")
+        logger.debug(f"[AGENT_LOOP] Using agent's permission_manager: {permission_manager is not None}")
     else:
         # Legacy fallback - try to build context from agent attributes
         from simple_agent.agent.context import AgentContext
@@ -249,6 +270,8 @@ def agent_loop(messages: list, agent) -> None:
             teammate=agent.teammate,
             provider=agent.provider,
         )
+        tool_registry = None
+        permission_manager = None
 
-    loop = AgentLoop(context)
+    loop = AgentLoop(context, tool_registry, permission_manager)
     loop.run(messages)
