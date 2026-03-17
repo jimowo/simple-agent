@@ -10,7 +10,7 @@ import pytest
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from simple_agent.core.container import ServiceContainer, reset_container
+from simple_agent.core.container import reset_container
 from simple_agent.models.config import Settings
 
 
@@ -71,8 +71,6 @@ def use_temp_workspace(temp_workspace):
     This is needed because file_tools and bash_tools use Settings().workdir.
     This fixture is autouse so all tests automatically use temp workspace.
     """
-    original_settings = Settings()
-
     def get_temp_settings():
         return Settings(
             workdir=temp_workspace,
@@ -231,6 +229,7 @@ def initialized_context(mock_settings, mock_provider, mock_permission_manager):
         teammate=teammate,
         project_mgr=project,
         session_mgr=session,
+        memory_mgr=None,
         provider=mock_provider,
     )
 

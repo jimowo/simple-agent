@@ -60,7 +60,13 @@ class SubAgentRunner:
             resp = self._provider.create_message(
                 messages=messages, tools=tools, max_tokens=8000
             )
-            messages.append({"role": "assistant", "content": resp.content})
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": resp.content,
+                    "tool_calls": resp.tool_calls,
+                }
+            )
 
             if resp.stop_reason != "tool_use":
                 break
@@ -139,6 +145,7 @@ class SubAgentRunner:
                 {
                     "type": "tool_result",
                     "tool_use_id": tc.id,
+                    "tool_name": tc.name,
                     "content": str(h(**tc.input))[:MAX_TOOL_OUTPUT],
                 }
             )

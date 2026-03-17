@@ -176,6 +176,8 @@ class Agent:
             BackgroundManager as BackgroundManagerImpl,
         )
         from simple_agent.managers.message import MessageBus as MessageBusImpl
+        from simple_agent.managers.project import ProjectManager as ProjectManagerImpl
+        from simple_agent.managers.session import SessionManager as SessionManagerImpl
         from simple_agent.managers.skill import SkillLoader as SkillLoaderImpl
         from simple_agent.managers.task import TaskManager as TaskManagerImpl
         from simple_agent.managers.teammate import TeammateManager as TeammateManagerImpl
@@ -189,6 +191,8 @@ class Agent:
         bus = message_bus or MessageBusImpl(settings)
         skill = skill_loader or SkillLoaderImpl(settings=settings)
         teammate = teammate_manager or TeammateManagerImpl(bus, task, settings)
+        project = ProjectManagerImpl(settings)
+        session = SessionManagerImpl(settings)
         provider = _create_provider(settings)
 
         return AgentContext(
@@ -199,6 +203,9 @@ class Agent:
             bus=bus,
             skill_loader=skill,
             teammate=teammate,
+            project_mgr=project,
+            session_mgr=session,
+            memory_mgr=None,
             provider=provider,
         )
 
@@ -365,9 +372,17 @@ class Agent:
             if msg.get("role") == "assistant":
                 content = msg.get("content", [])
                 if isinstance(content, list):
-                    return "\n".join(
-                        getattr(c, "text", str(c)) for c in content if hasattr(c, "text") or c
-                    )
+                    text_parts = []
+                    for c in content:
+                        if isinstance(c, dict) and c.get("type") == "text":
+                            text = c.get("text", "")
+                            if text:
+                                text_parts.append(str(text))
+                        elif hasattr(c, "text"):
+                            text = getattr(c, "text", "")
+                            if text:
+                                text_parts.append(str(text))
+                    return "\n".join(text_parts)
                 return str(content)
         return "(no response)"
 

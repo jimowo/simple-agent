@@ -1,7 +1,4 @@
 """CLI integration tests for simple-agent."""
-
-import json
-from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
@@ -114,15 +111,24 @@ class TestCLIIntegration:
 
     def test_run_command_basic(self, runner, mock_provider, temp_workspace):
         """Test the run command with a simple prompt."""
-        # Mock the agent to avoid actual API calls
-        with patch('simple_agent.cli.main._get_agent') as mock_get_agent:
+        with patch('simple_agent.cli.main._get_agent') as mock_get_agent, patch(
+            'simple_agent.cli.main.agent_loop'
+        ) as mock_agent_loop:
             mock_agent = Mock()
-            mock_agent.process_query.return_value = "Test response"
             mock_get_agent.return_value = mock_agent
 
+            def populate_history(history, agent):
+                history.append(
+                    {
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": "Test response"}],
+                    }
+                )
+
+            mock_agent_loop.side_effect = populate_history
             result = runner.invoke(app, ["run", "Hello"])
-            # The command should complete without error
-            # Note: Actual agent processing is mocked
+            assert result.exit_code == 0
+            assert "Test response" in result.stdout
 
     def test_chat_command_requires_interactive(self, runner):
         """Test that chat command would require interactive mode."""

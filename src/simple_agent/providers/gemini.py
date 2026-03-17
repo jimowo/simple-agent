@@ -3,14 +3,7 @@
 from typing import Any, Dict, List, Optional
 
 from google import genai
-from google.genai.types import (
-    Content,
-    FunctionDeclaration,
-    GenerateContentConfig,
-    Part,
-    Tool,
-    UserContent,
-)
+from google.genai.types import FunctionDeclaration, GenerateContentConfig, Tool
 
 from simple_agent.providers.base import BaseProvider, ProviderResponse, ToolCall
 
@@ -64,36 +57,54 @@ class GeminiProvider(BaseProvider):
         **kwargs,
     ) -> ProviderResponse:
         """Create a message using Gemini API."""
-        # Build contents from messages
+        system_prompt, filtered_messages = self.split_system_messages(messages, system)
+
+        # Build contents from messages using raw dict payloads so tool history can round-trip.
         contents = []
-        for msg in messages:
-            if msg["role"] == "user":
-                contents.append(
-                    UserContent(
-                        parts=Part(text=msg.get("content", ""))
+        for msg in filtered_messages:
+            role = msg["role"]
+            parts = []
+
+            if role == "assistant":
+                text = self.content_to_text(msg.get("content", ""))
+                if text:
+                    parts.append({"text": text})
+                for tc in self.extract_tool_calls(msg):
+                    parts.append(
+                        {
+                            "functionCall": {
+                                "name": tc.name,
+                                "args": tc.input,
+                            }
+                        }
                     )
-                )
-            elif msg["role"] == "assistant":
-                content = msg.get("content", "")
-                if isinstance(content, list):
-                    # Handle tool results and text blocks
-                    parts = []
-                    for c in content:
-                        if isinstance(c, dict):
-                            if c.get("type") == "tool_result":
-                                parts.append(Part(text=c.get("content", "")))
-                            elif c.get("type") == "text":
-                                parts.append(Part(text=c.get("text", "")))
-                        else:
-                            parts.append(Part(text=str(c)))
-                    contents.append(Content(role="model", parts=parts))
-                else:
-                    contents.append(
-                        Content(
-                            role="model",
-                            parts=Part(text=str(content))
+                if parts:
+                    contents.append({"role": "model", "parts": parts})
+                continue
+
+            content = msg.get("content", "")
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "tool_result":
+                        parts.append(
+                            {
+                                "functionResponse": {
+                                    "name": block.get("tool_name", "tool"),
+                                    "response": {"output": str(block.get("content", ""))},
+                                }
+                            }
                         )
-                    )
+                    else:
+                        text = self.block_to_text(block)
+                        if text:
+                            parts.append({"text": text})
+            else:
+                text = self.content_to_text(content)
+                if text:
+                    parts.append({"text": text})
+
+            if parts:
+                contents.append({"role": "user", "parts": parts})
 
         # Configure generation
         config = GenerateContentConfig(
@@ -112,7 +123,7 @@ class GeminiProvider(BaseProvider):
             contents=contents,
             config=config,
             tools=gemini_tools,
-            system_instruction=system,
+            system_instruction=system_prompt,
         )
 
         return self.convert_response_to_standard(response)
@@ -121,6 +132,8 @@ class GeminiProvider(BaseProvider):
         """Convert Gemini response to standard format."""
         content = []
         tool_calls = []
+
+        stop_reason = "stop"
 
         # Process candidates
         if hasattr(response, "candidates") and response.candidates:
@@ -144,7 +157,6 @@ class GeminiProvider(BaseProvider):
                         )
 
             # Finish reason
-            stop_reason = "stop"
             if hasattr(candidate, "finish_reason"):
                 finish_reason = candidate.finish_reason
                 stop_reason = finish_reason.name.lower() if hasattr(finish_reason, "name") else str(finish_reason).lower()

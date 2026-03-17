@@ -23,6 +23,26 @@ app = typer.Typer(
 console = Console()
 
 
+def _extract_response_text(content) -> str:
+    """Extract displayable text from provider response content."""
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+
+    text_parts = []
+    for block in content:
+        if isinstance(block, dict) and block.get("type") == "text":
+            text = block.get("text", "")
+            if text:
+                text_parts.append(str(text))
+        elif hasattr(block, "text"):
+            text = getattr(block, "text", "")
+            if text:
+                text_parts.append(str(text))
+    return "\n".join(text_parts)
+
+
 class ConsoleStatusController:
     """Status controller that manages Rich console.status during permission requests.
 
@@ -407,9 +427,8 @@ def chat_command(
     status_controller = ConsoleStatusController(console)
     permission_manager = PermissionManager(status_controller=status_controller)
 
-    agent = _get_agent(settings, permission_manager)
-
     # Initialize project and session
+    from simple_agent.agent.context import AgentContext
     from simple_agent.managers.project import ProjectManager
     from simple_agent.managers.session import SessionManager
     from simple_agent.models.projects import SessionMessage
@@ -436,6 +455,13 @@ def chat_command(
         session = sm.create_session(project.project_id, title="Chat Session")
         sm.set_current_session(session)
         history = []
+
+    context = AgentContext.from_container(
+        settings,
+        project_mgr=pm,
+        session_mgr=sm,
+    )
+    agent = Agent(context=context, permission_manager=permission_manager)
 
     provider_name = settings.get_active_provider()
     console.print(f"[cyan]simple-agent[/cyan] - AI Agent at {settings.workdir}")
@@ -516,22 +542,15 @@ def chat_command(
         # Display response and save to session
         for msg in reversed(history):
             if msg.get("role") == "assistant":
-                content = msg.get("content", [])
-                if isinstance(content, list):
-                    response = ""
-                    for c in content:
-                        if hasattr(c, "text"):
-                            response = c.text
-                            break
-                    if response:
-                        console.print(Markdown(response))
-                        # Save assistant message to session
-                        assistant_msg = SessionMessage(
-                            role="assistant",
-                            content=response,
-                            timestamp=time.time()
-                        )
-                        sm.append_message(project.project_id, session.session_id, assistant_msg)
+                response = _extract_response_text(msg.get("content", []))
+                if response:
+                    console.print(Markdown(response))
+                    assistant_msg = SessionMessage(
+                        role="assistant",
+                        content=response,
+                        timestamp=time.time()
+                    )
+                    sm.append_message(project.project_id, session.session_id, assistant_msg)
                 break
 
         console.print()
@@ -591,15 +610,9 @@ def run_command(
     # Display response
     for msg in reversed(history):
         if msg.get("role") == "assistant":
-            content = msg.get("content", [])
-            if isinstance(content, list):
-                response = ""
-                for c in content:
-                    if hasattr(c, "text"):
-                        response = c.text
-                        break
-                if response:
-                    console.print(Markdown(response))
+            response = _extract_response_text(msg.get("content", []))
+            if response:
+                console.print(Markdown(response))
             break
 
 

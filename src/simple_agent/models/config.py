@@ -9,7 +9,12 @@ import os
 from pathlib import Path
 from typing import Dict, Optional
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover - fallback for minimal environments
+    def load_dotenv(*args, **kwargs) -> bool:
+        """Fallback no-op when python-dotenv is unavailable."""
+        return False
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic_settings import BaseSettings
 

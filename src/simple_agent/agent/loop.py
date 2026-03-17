@@ -74,7 +74,13 @@ class AgentLoop:
             self._retrieve_and_inject_memory(messages)
 
             response = self._call_llm(messages)
-            messages.append({"role": "assistant", "content": response.content})
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": response.content,
+                    "tool_calls": response.tool_calls,
+                }
+            )
 
             if response.stop_reason != "tool_use":
                 return
@@ -299,7 +305,12 @@ class AgentLoop:
 
             print(f"> {tc.name}: {str(output)[:200]}")
             results.append(
-                {"type": "tool_result", "tool_use_id": tc.id, "content": str(output)}
+                {
+                    "type": "tool_result",
+                    "tool_use_id": tc.id,
+                    "tool_name": tc.name,
+                    "content": str(output),
+                }
             )
 
             if tc.name == "TodoWrite":

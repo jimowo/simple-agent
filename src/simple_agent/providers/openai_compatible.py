@@ -32,10 +32,51 @@ class OpenAICompatibleProvider(BaseProvider):
         Returns:
             List of messages in OpenAI-compatible format
         """
-        formatted = []
+        formatted: List[Dict[str, Any]] = []
         for msg in messages:
-            formatted_msg = {"role": msg["role"], "content": msg["content"]}
-            formatted.append(formatted_msg)
+            role = msg["role"]
+
+            if role == "assistant":
+                assistant_message = {
+                    "role": "assistant",
+                    "content": self.content_to_text(msg.get("content", "")),
+                }
+                tool_calls = self.extract_tool_calls(msg)
+                if tool_calls:
+                    assistant_message["tool_calls"] = [
+                        {
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.name,
+                                "arguments": self.serialize_tool_call_arguments(tc.input),
+                            },
+                        }
+                        for tc in tool_calls
+                    ]
+                formatted.append(assistant_message)
+                continue
+
+            if role == "user" and isinstance(msg.get("content"), list):
+                text_parts: List[str] = []
+                for block in msg["content"]:
+                    if isinstance(block, dict) and block.get("type") == "tool_result":
+                        formatted.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": block.get("tool_use_id", ""),
+                                "content": str(block.get("content", "")),
+                            }
+                        )
+                    else:
+                        text = self.block_to_text(block)
+                        if text:
+                            text_parts.append(text)
+                if text_parts:
+                    formatted.append({"role": "user", "content": "\n".join(text_parts)})
+                continue
+
+            formatted.append({"role": role, "content": self.content_to_text(msg.get("content", ""))})
         return formatted
 
     def convert_tools_to_format(self, tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -80,11 +121,11 @@ class OpenAICompatibleProvider(BaseProvider):
         Returns:
             ProviderResponse with standardized format
         """
-        formatted_messages = self.convert_messages_to_format(messages)
+        system_prompt, filtered_messages = self.split_system_messages(messages, system)
+        formatted_messages = self.convert_messages_to_format(filtered_messages)
 
-        # Add system message at the beginning
-        if system:
-            formatted_messages.insert(0, {"role": "system", "content": system})
+        if system_prompt:
+            formatted_messages.insert(0, {"role": "system", "content": system_prompt})
 
         params = {
             "model": self.model,

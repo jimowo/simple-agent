@@ -74,7 +74,7 @@ Skills available:
 {self.skill_loader.descriptions()}"""
 
     @classmethod
-    def from_container(cls, settings: Settings):
+    def from_container(cls, settings: Settings, **overrides):
         """Create AgentContext from the service container.
 
         This factory method resolves all dependencies from the container,
@@ -105,26 +105,43 @@ Skills available:
         # Override Settings with the provided one
         container.register_instance(Settings, settings)
 
+        # Override selected manager instances when the caller needs shared state.
+        interface_map = {
+            "todo": TodoManager,
+            "task_mgr": TaskManager,
+            "bg": BackgroundManager,
+            "bus": MessageBus,
+            "skill_loader": SkillLoader,
+            "teammate": TeammateManager,
+            "project_mgr": ProjectManager,
+            "session_mgr": SessionManager,
+            "memory_mgr": MemoryManager,
+        }
+        for field_name, interface in interface_map.items():
+            if overrides.get(field_name) is not None:
+                container.register_instance(interface, overrides[field_name])
+
         # Resolve all dependencies
         provider = _create_provider(settings)
 
         # Resolve MemoryManager (may be None if disabled)
-        memory_mgr = None
-        try:
-            memory_mgr = container.resolve(MemoryManager)
-        except Exception:
-            pass  # Memory manager is optional
+        memory_mgr = overrides.get("memory_mgr")
+        if memory_mgr is None:
+            try:
+                memory_mgr = container.resolve(MemoryManager)
+            except Exception:
+                pass  # Memory manager is optional
 
         return cls(
             settings=settings,
-            todo=container.resolve(TodoManager),
-            task_mgr=container.resolve(TaskManager),
-            bg=container.resolve(BackgroundManager),
-            bus=container.resolve(MessageBus),
-            skill_loader=container.resolve(SkillLoader),
-            teammate=container.resolve(TeammateManager),
-            project_mgr=container.resolve(ProjectManager),
-            session_mgr=container.resolve(SessionManager),
+            todo=overrides.get("todo") or container.resolve(TodoManager),
+            task_mgr=overrides.get("task_mgr") or container.resolve(TaskManager),
+            bg=overrides.get("bg") or container.resolve(BackgroundManager),
+            bus=overrides.get("bus") or container.resolve(MessageBus),
+            skill_loader=overrides.get("skill_loader") or container.resolve(SkillLoader),
+            teammate=overrides.get("teammate") or container.resolve(TeammateManager),
+            project_mgr=overrides.get("project_mgr") or container.resolve(ProjectManager),
+            session_mgr=overrides.get("session_mgr") or container.resolve(SessionManager),
             memory_mgr=memory_mgr,
             provider=provider,
         )

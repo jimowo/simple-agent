@@ -27,6 +27,53 @@ class AnthropicProvider(BaseProvider):
             return Anthropic(base_url=self.base_url, api_key=self.api_key)
         return Anthropic(api_key=self.api_key)
 
+    def convert_messages_to_format(
+        self, messages: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Convert standard message format to Anthropic content blocks."""
+        formatted: List[Dict[str, Any]] = []
+
+        for msg in messages:
+            role = msg["role"]
+            content = msg.get("content", "")
+            blocks: List[Dict[str, Any]] = []
+
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict):
+                        block_type = block.get("type")
+                        if block_type == "text":
+                            blocks.append({"type": "text", "text": str(block.get("text", ""))})
+                        elif block_type == "tool_result":
+                            blocks.append(
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": block.get("tool_use_id", ""),
+                                    "content": str(block.get("content", "")),
+                                }
+                            )
+                    elif hasattr(block, "type") and getattr(block, "type", "") == "text":
+                        blocks.append({"type": "text", "text": str(getattr(block, "text", ""))})
+            else:
+                text = self.content_to_text(content)
+                if text:
+                    blocks.append({"type": "text", "text": text})
+
+            if role == "assistant":
+                for tc in self.extract_tool_calls(msg):
+                    blocks.append(
+                        {
+                            "type": "tool_use",
+                            "id": tc.id,
+                            "name": tc.name,
+                            "input": tc.input,
+                        }
+                    )
+
+            formatted.append({"role": role, "content": blocks or [{"type": "text", "text": ""}]})
+
+        return formatted
+
     def create_message(
         self,
         messages: List[Dict[str, Any]],
@@ -36,9 +83,10 @@ class AnthropicProvider(BaseProvider):
         **kwargs,
     ) -> ProviderResponse:
         """Create a message using Anthropic API."""
+        system_prompt, filtered_messages = self.split_system_messages(messages, system)
         params = {
             "model": self.model,
-            "messages": self.convert_messages_to_format(messages),
+            "messages": self.convert_messages_to_format(filtered_messages),
             "max_tokens": max_tokens,
             **kwargs,
         }
@@ -46,8 +94,8 @@ class AnthropicProvider(BaseProvider):
         if tools:
             params["tools"] = self.convert_tools_to_format(tools)
 
-        if system:
-            params["system"] = system
+        if system_prompt:
+            params["system"] = system_prompt
 
         response = self.client.messages.create(**params)
         return self.convert_response_to_standard(response)

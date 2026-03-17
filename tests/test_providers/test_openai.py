@@ -192,6 +192,43 @@ class TestOpenAIProviderSecurity:
         assert result.tool_calls[0].name == "tool1"
         assert result.tool_calls[1].name == "tool2"
 
+    def test_convert_messages_preserves_tool_round_trip(self):
+        """Test OpenAI-compatible history conversion for tool use follow-up turns."""
+        provider = OpenAIProvider(api_key="test-key")
+
+        messages = [
+            {"role": "system", "content": "memory context"},
+            {"role": "user", "content": "List files"},
+            {
+                "role": "assistant",
+                "content": [{"type": "text", "text": "I'll inspect the workspace."}],
+                "tool_calls": [
+                    ToolCall(
+                        id="call_1",
+                        name="bash",
+                        input={"command": "ls"},
+                    )
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {"type": "tool_result", "tool_use_id": "call_1", "content": "a.py"},
+                    {"type": "text", "text": "<reminder>Update your todos.</reminder>"},
+                ],
+            },
+        ]
+
+        system_prompt, filtered = provider.split_system_messages(messages, "base system")
+        formatted = provider.convert_messages_to_format(filtered)
+
+        assert system_prompt == "base system\n\nmemory context"
+        assert formatted[0]["role"] == "user"
+        assert formatted[1]["role"] == "assistant"
+        assert formatted[1]["tool_calls"][0]["function"]["arguments"] == '{"command": "ls"}'
+        assert formatted[2] == {"role": "tool", "tool_call_id": "call_1", "content": "a.py"}
+        assert formatted[3] == {"role": "user", "content": "<reminder>Update your todos.</reminder>"}
+
 
 @pytest.mark.security
 class TestGroqProviderSecurity:

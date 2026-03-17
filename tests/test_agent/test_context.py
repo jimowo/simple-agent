@@ -1,7 +1,5 @@
 """Test Agent context and dependency injection."""
 
-import pytest
-from pathlib import Path
 from unittest.mock import Mock, patch
 
 from simple_agent.agent.context import AgentContext
@@ -42,6 +40,7 @@ class TestAgentContext:
             teammate=teammate,
             project_mgr=project,
             session_mgr=session,
+            memory_mgr=None,
             provider=mock_provider,
         )
 
@@ -105,6 +104,30 @@ class TestAgentContext:
             assert context.teammate is not None
             assert context.project_mgr is not None
             assert context.session_mgr is not None
+
+    def test_from_container_respects_manager_overrides(self, temp_workspace):
+        """Test creating context with caller-provided stateful manager instances."""
+        from simple_agent.core.container import reset_container
+        from simple_agent.managers.project import ProjectManager
+        from simple_agent.managers.session import SessionManager
+
+        reset_container()
+        settings = Settings(workdir=temp_workspace)
+        project_mgr = ProjectManager(settings)
+        session_mgr = SessionManager(settings)
+
+        with patch('simple_agent.core.service_registration._create_provider') as mock_create_provider:
+            mock_provider = Mock(spec=BaseProvider)
+            mock_create_provider.return_value = mock_provider
+
+            context = AgentContext.from_container(
+                settings,
+                project_mgr=project_mgr,
+                session_mgr=session_mgr,
+            )
+
+        assert context.project_mgr is project_mgr
+        assert context.session_mgr is session_mgr
 
 
 class TestContextIntegration:

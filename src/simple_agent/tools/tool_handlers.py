@@ -76,6 +76,7 @@ def initialize_handlers(
             teammate=teammate_manager,
             project_mgr=None,  # Not needed for legacy handlers
             session_mgr=None,  # Not needed for legacy handlers
+            memory_mgr=None,
             provider=provider,
         )
         _tool_handler_registry = ToolHandlerRegistry(context, permission_manager)
