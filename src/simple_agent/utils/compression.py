@@ -9,6 +9,7 @@ from loguru import logger
 
 from simple_agent.models.config import Settings
 from simple_agent.models.projects import SessionMessage
+from simple_agent.utils.path_utils import get_session_messages_file
 
 
 def estimate_tokens(messages: List[Any]) -> int:
@@ -119,8 +120,9 @@ def save_session_transcript(
         Path to the session file
     """
 
-    project_dir = session_mgr.settings.workdir / ".simple" / "projects" / project_id
-    session_file = project_dir / f"{session_id}.jsonl"
+    session_file = get_session_messages_file(
+        session_mgr.settings.projects_root, project_id, session_id
+    )
 
     # Ensure directory exists
     session_file.parent.mkdir(parents=True, exist_ok=True)
@@ -230,8 +232,9 @@ def get_session_history(project_id: str, session_id: str, session_mgr) -> List[A
         List of message dictionaries
     """
 
-    project_dir = session_mgr.settings.workdir / ".simple" / "projects" / project_id
-    session_file = project_dir / f"{session_id}.jsonl"
+    session_file = get_session_messages_file(
+        session_mgr.settings.projects_root, project_id, session_id
+    )
 
     if not session_file.exists():
         return []

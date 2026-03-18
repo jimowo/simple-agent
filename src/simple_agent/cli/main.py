@@ -11,9 +11,10 @@ from simple_agent.agent.base import Agent
 from simple_agent.agent.loop import AgentLoop
 from simple_agent.cli import InteractivePrompt
 from simple_agent.models.config import Settings, create_settings, initialize_config
-from simple_agent.permissions.manager import PermissionManager
+from simple_agent.permissions.manager import PermissionManager, prompt_for_permission
 from simple_agent.permissions.models import PermissionPolicy, PermissionRequest, PermissionResponse
 from simple_agent.utils.logger import setup_logger
+from simple_agent.utils.path_utils import get_session_history_file
 
 app = typer.Typer(
     name="simple-agent",
@@ -153,21 +154,21 @@ def _create_run_permission_callback(console: Console, status_controller: Console
             command = request.params.get("command", "")
             if is_dangerous_command(command):
                 # Dangerous command - ask for permission
-                return _ask_permission(console, status_controller, request)
+                return _ask_permission(status_controller, request)
             else:
                 # Safe command - auto-allow
                 return PermissionResponse(allowed=True)
 
         # For other tools, ask for permission based on risk level
         if request.risk_level == "high":
-            return _ask_permission(console, status_controller, request)
+            return _ask_permission(status_controller, request)
         else:
             return PermissionResponse(allowed=True)
 
     return callback
 
 
-def _ask_permission(console: Console, status_controller: ConsoleStatusController, request: PermissionRequest) -> PermissionResponse:
+def _ask_permission(status_controller: ConsoleStatusController, request: PermissionRequest) -> PermissionResponse:
     """Ask user for permission with proper status handling.
 
     Args:
@@ -178,195 +179,14 @@ def _ask_permission(console: Console, status_controller: ConsoleStatusController
     Returns:
         Permission response
     """
-    from simple_agent.permissions.manager import USE_PROMPT_TOOLKIT
-
     # Pause status display
     status_controller.pause()
 
     try:
-        # Try to use prompt_toolkit for enhanced UX
-        if USE_PROMPT_TOOLKIT:
-            try:
-                return _prompt_with_prompt_toolkit(console, request)
-            except Exception:
-                # Fall back to basic implementation
-                return _prompt_basic(console, request)
-        else:
-            return _prompt_basic(console, request)
+        return prompt_for_permission(request)
     finally:
         # Resume status display
         status_controller.resume()
-
-
-def _prompt_with_prompt_toolkit(console: Console, request) -> PermissionResponse:
-    """Use prompt_toolkit for enhanced user interaction."""
-    from prompt_toolkit import HTML, PromptSession
-    from prompt_toolkit.completion import WordCompleter
-    from prompt_toolkit.validation import ValidationError, Validator
-    from rich.panel import Panel
-    from rich.text import Text
-
-    # Display permission request with Rich
-    console.line()
-    console.line()
-
-    panel_content = Text()
-    panel_content.append("Permission Required\n", style="bold yellow")
-    panel_content.append(f"Reason: {request.reason}\n", style="default")
-    panel_content.append(f"Tool: {request.tool}\n", style="cyan")
-    panel_content.append(f"Risk: {request.risk_level}\n", style="red")
-
-    if request.params:
-        panel_content.append(f"Parameters: {request._format_params()}\n", style="dim")
-
-    console.print(Panel(panel_content, title="[yellow]WARNING[/yellow]", border_style="yellow"))
-    console.line()
-
-    class ChoiceValidator(Validator):
-        """Validate permission response choices."""
-
-        def __init__(self):
-            self.valid_choices = ["y", "yes", "n", "no", "a", "always", "d", "deny", "s", "skip", ""]
-
-        def validate(self, document):
-            text = document.text.strip().lower()
-            if text in self.valid_choices:
-                return True
-            if text in ["h", "help"]:
-                return True
-            raise ValidationError(
-                message="Invalid choice. Enter Y, n, a, d, s, or h for help",
-                cursor_position=len(document.text)
-            )
-
-    # Create prompt session with completer
-    choices = ["yes", "no", "always", "deny", "skip", "help"]
-    completer = WordCompleter(choices, ignore_case=True)
-
-    session = PromptSession(
-        completer=completer,
-        complete_while_typing=True,
-        validator=ChoiceValidator(),
-        validate_while_typing=False,
-    )
-
-    # Interactive prompt loop
-    while True:
-        try:
-            response = session.prompt(
-                HTML("<ansiyellow>Allow?</ansiyellow> [Y/n/a(llow)/d(eny)/s(kip)/h(elp)]: <ansireset>")
-            ).strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            # User cancelled, deny by default
-            return PermissionResponse(allowed=False)
-
-        # Handle empty response (default to yes)
-        if not response or response == "":
-            return PermissionResponse(allowed=True)
-
-        # Handle help
-        if response in ("h", "help"):
-            _show_permission_help()
-            continue
-
-        # Handle choices
-        if response in ("y", "yes"):
-            return PermissionResponse(allowed=True)
-        elif response in ("n", "no"):
-            return PermissionResponse(allowed=False)
-        elif response in ("a", "always"):
-            return PermissionResponse(allowed=True, policy=PermissionPolicy.ALWAYS, remember=True)
-        elif response in ("d", "deny"):
-            return PermissionResponse(allowed=False, policy=PermissionPolicy.NEVER, remember=True)
-        elif response in ("s", "skip"):
-            return PermissionResponse(allowed=False)
-
-
-def _prompt_basic(console: Console, request) -> PermissionResponse:
-    """Basic input-based permission prompt."""
-    from rich.panel import Panel
-    from rich.text import Text
-
-    # Display permission request
-    try:
-        console.line()
-        console.line()
-
-        panel_content = Text()
-        panel_content.append("Permission Required\n", style="bold yellow")
-        panel_content.append(f"Reason: {request.reason}\n", style="default")
-        panel_content.append(f"Tool: {request.tool}\n", style="cyan")
-        panel_content.append(f"Risk: {request.risk_level}\n", style="red")
-
-        if request.params:
-            panel_content.append(f"Parameters: {request._format_params()}\n", style="dim")
-
-        console.print(Panel(panel_content, title="[yellow]WARNING[/yellow]", border_style="yellow"))
-        console.line()
-
-    except Exception:
-        # Fallback to simple print
-        try:
-            print("\n")
-            print(f"[PERMISSION] {request.reason}")
-            print(f"  Tool: {request.tool}")
-            print(f"  Risk: {request.risk_level}")
-        except Exception:
-            print("\n")
-            print(f"[PERMISSION] Tool: {request.tool} Risk: {request.risk_level}")
-
-    # Get user response
-    while True:
-        try:
-            response = input(
-                "Allow? [Y/n/a(llow for session)/d(eny for session)/s(kip once)]: "
-            ).strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            # User cancelled or input not available, deny by default
-            return PermissionResponse(allowed=False)
-        except Exception:
-            # Fallback for encoding issues
-            try:
-                response = input("Allow? [Y/n/a/d/s]: ").strip().lower()
-            except (EOFError, KeyboardInterrupt):
-                return PermissionResponse(allowed=False)
-
-        if response in ("y", "yes", ""):
-            return PermissionResponse(allowed=True)
-        elif response in ("n", "no"):
-            return PermissionResponse(allowed=False)
-        elif response in ("a", "always"):
-            return PermissionResponse(allowed=True, policy=PermissionPolicy.ALWAYS, remember=True)
-        elif response in ("d", "deny"):
-            return PermissionResponse(allowed=False, policy=PermissionPolicy.NEVER, remember=True)
-        elif response in ("s", "skip"):
-            return PermissionResponse(allowed=False)
-        else:
-            print("Invalid response. Please enter Y, n, a, d, or s.")
-
-
-def _show_permission_help():
-    """Show help for permission choices."""
-    from rich.console import Console
-    from rich.table import Table
-
-    console = Console()
-
-    table = Table(title="Permission Choices", show_header=True, header_style="bold cyan")
-    table.add_column("Choice", style="cyan", width=10)
-    table.add_column("Action", style="green")
-    table.add_column("Description", style="dim")
-
-    table.add_row("Y/yes", "Allow once", "Allow this operation for this time only")
-    table.add_row("n/no", "Deny", "Deny this operation")
-    table.add_row("a/always", "Allow for session", "Always allow this tool (remembered)")
-    table.add_row("d/deny", "Deny for session", "Never allow this tool (remembered)")
-    table.add_row("s/skip", "Skip", "Skip this operation (same as deny)")
-    table.add_row("h/help", "Show help", "Display this help message")
-
-    console.print()
-    console.print(table)
-    console.print()
 
 
 def _get_agent(settings: Settings = None, permission_manager: PermissionManager = None) -> Agent:
@@ -472,14 +292,16 @@ def chat_command(
     console.print("Use [cyan]↑/↓[/cyan] arrows for history, [cyan]Tab[/cyan] for completion.\n")
 
     # Create interactive prompt with session-specific history
-    def get_session_history_file(session_id: str) -> Path:
+    def get_history_file(session_id: str) -> Path:
         """Get history file path for a specific session."""
-        project_dir = settings.workdir / ".simple" / "projects" / project.project_id
-        session_dir = project_dir / session_id
-        return session_dir / "chat_history"
+        return get_session_history_file(
+            settings.projects_root,
+            project.project_id,
+            session_id,
+        )
 
     prompt_session = InteractivePrompt(
-        history_file=get_session_history_file(session.session_id),
+        history_file=get_history_file(session.session_id),
         history_size=1000,
         enable_completion=True,
     )
@@ -510,7 +332,7 @@ def chat_command(
                 for msg in saved_messages:
                     history.append({"role": msg.role, "content": msg.content})
                 # Switch history file to match new session
-                prompt_session.set_history_file(get_session_history_file(session.session_id))
+                prompt_session.set_history_file(get_history_file(session.session_id))
                 console.print(f"[yellow]Session switched: {session.session_id[:8]}...[/yellow]\n")
                 continue
             else:
@@ -966,7 +788,11 @@ def _handle_session_command(query: str, project, sm, console) -> str:
         # Get current session's history file
         if sm.get_current_session():
             workdir = Path(project.original_path)
-            history_file = workdir / ".simple" / "projects" / project.project_id / sm.get_current_session().session_id / "chat_history"
+            history_file = get_session_history_file(
+                workdir / ".simple" / "projects",
+                project.project_id,
+                sm.get_current_session().session_id,
+            )
             if history_file.exists():
                 console.print("\n[bold]Command history:[/bold]\n")
                 with open(history_file, "r", encoding="utf-8") as f:

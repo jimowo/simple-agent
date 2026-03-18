@@ -1,8 +1,4 @@
-"""Path utilities for project ID conversion.
-
-This module provides functions to convert between file system paths
-and project IDs, following Claude Code's naming convention.
-"""
+"""Path utilities for project/session storage and project ID conversion."""
 
 import re
 from pathlib import Path
@@ -89,3 +85,43 @@ def is_valid_project_id(project_id: str) -> bool:
         return False
 
     return True
+
+
+def get_project_dir(projects_root: Path, project_id: str) -> Path:
+    """Return the canonical project directory path."""
+    return projects_root / project_id
+
+
+def get_project_metadata_file(projects_root: Path, project_id: str) -> Path:
+    """Return the canonical project metadata file path."""
+    return get_project_dir(projects_root, project_id) / "project.json"
+
+
+def get_session_dir(projects_root: Path, project_id: str, session_id: str) -> Path:
+    """Return the canonical session directory path."""
+    return get_project_dir(projects_root, project_id) / session_id
+
+
+def get_session_metadata_file(projects_root: Path, project_id: str, session_id: str) -> Path:
+    """Return the canonical session metadata file path."""
+    return get_session_dir(projects_root, project_id, session_id) / "session.json"
+
+
+def get_session_messages_file(projects_root: Path, project_id: str, session_id: str) -> Path:
+    """Return the canonical session messages file path."""
+    return get_session_dir(projects_root, project_id, session_id) / "messages.jsonl"
+
+
+def get_legacy_session_messages_file(projects_root: Path, project_id: str, session_id: str) -> Path:
+    """Return the legacy flat session messages file path."""
+    return get_project_dir(projects_root, project_id) / f"{session_id}.jsonl"
+
+
+def get_session_history_file(projects_root: Path, project_id: str, session_id: str) -> Path:
+    """Return the canonical interactive history file path."""
+    return get_session_dir(projects_root, project_id, session_id) / "chat_history"
+
+
+def get_session_subagents_dir(projects_root: Path, project_id: str, session_id: str) -> Path:
+    """Return the canonical subagents directory path."""
+    return get_session_dir(projects_root, project_id, session_id) / "subagents"

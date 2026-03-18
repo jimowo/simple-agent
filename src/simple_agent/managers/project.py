@@ -11,7 +11,11 @@ from typing import List, Optional
 from simple_agent.managers.base import BaseManager
 from simple_agent.models.config import Settings
 from simple_agent.models.projects import ProjectMetadata
-from simple_agent.utils.path_utils import path_to_project_id
+from simple_agent.utils.path_utils import (
+    get_project_dir,
+    get_project_metadata_file,
+    path_to_project_id,
+)
 
 
 class ProjectManager(BaseManager):
@@ -36,10 +40,7 @@ class ProjectManager(BaseManager):
             settings: Optional settings instance
         """
         super().__init__(settings)
-        # Use .simple directory instead of .claude to avoid conflicts
-        self.projects_root = self._ensure_dir(
-            self.settings.workdir / ".simple" / "projects"
-        )
+        self.projects_root = self._ensure_dir(self.settings.projects_root)
         self._current_project: Optional[ProjectMetadata] = None
 
     def get_or_create_project(self, workdir: Path) -> ProjectMetadata:
@@ -55,10 +56,8 @@ class ProjectManager(BaseManager):
             ProjectMetadata instance for the project
         """
         project_id = path_to_project_id(workdir)
-        project_dir = self.projects_root / project_id
-        project_dir = self._ensure_dir(project_dir)
-
-        metadata_file = project_dir / "project.json"
+        project_dir = self._ensure_dir(get_project_dir(self.projects_root, project_id))
+        metadata_file = get_project_metadata_file(self.projects_root, project_id)
 
         if metadata_file.exists():
             # Load existing project
@@ -95,7 +94,7 @@ class ProjectManager(BaseManager):
         Returns:
             ProjectMetadata if found, None otherwise
         """
-        metadata_file = self.projects_root / project_id / "project.json"
+        metadata_file = get_project_metadata_file(self.projects_root, project_id)
 
         if not metadata_file.exists():
             return None
@@ -189,8 +188,8 @@ class ProjectManager(BaseManager):
         Args:
             project: Project to save
         """
-        project_dir = self.projects_root / project.project_id
-        metadata_file = project_dir / "project.json"
+        project_dir = get_project_dir(self.projects_root, project.project_id)
+        metadata_file = get_project_metadata_file(self.projects_root, project.project_id)
 
         metadata_file.write_text(
             project.model_dump_json(indent=2, exclude_none=True),

@@ -1,399 +1,303 @@
-"""Centralized tool definitions for the agent.
+"""Centralized tool definitions for the agent runtime."""
 
-This module provides a single source of truth for all tool definitions,
-eliminating duplication across the codebase.
-"""
+from typing import Any, Dict, Iterable, List
 
-from typing import Any, Dict, List
 
-# Basic tools (available to all agent types)
-BASIC_TOOLS: List[Dict[str, Any]] = [
-    {
-        "name": "bash",
-        "description": "Run a shell command.",
+def _tool(name: str, description: str, properties: Dict[str, Any], required: List[str] | None = None) -> Dict[str, Any]:
+    """Create a normalized tool definition."""
+    return {
+        "name": name,
+        "description": description,
         "input_schema": {
             "type": "object",
-            "properties": {"command": {"type": "string"}},
-            "required": ["command"],
+            "properties": properties,
+            "required": required or [],
         },
-    },
-    {
-        "name": "read_file",
-        "description": "Read file contents.",
-        "input_schema": {
-            "type": "object",
-            "properties": {"path": {"type": "string"}, "limit": {"type": "integer"}},
-            "required": ["path"],
-        },
-    },
-    {
-        "name": "glob",
-        "description": "Find files by pattern matching using glob syntax (e.g., '**/*.py', 'src/**/*.txt').",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "pattern": {"type": "string"},
-                "path": {"type": "string"},
-            },
-            "required": ["pattern"],
-        },
-    },
-    {
-        "name": "grep",
-        "description": "Search for patterns in file contents using regex.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "pattern": {"type": "string"},
-                "path": {"type": "string"},
-                "file_pattern": {"type": "string"},
-                "ignore_case": {"type": "boolean"},
-            },
-            "required": ["pattern"],
-        },
-    },
-]
+    }
 
 
-# Write/edit tools (restricted access)
-WRITE_TOOLS: List[Dict[str, Any]] = [
-    {
-        "name": "write_file",
-        "description": "Write content to file.",
-        "input_schema": {
-            "type": "object",
-            "properties": {"path": {"type": "string"}, "content": {"type": "string"}},
-            "required": ["path", "content"],
+TOOL_SPECS: Dict[str, Dict[str, Any]] = {
+    "bash": _tool(
+        "bash",
+        "Run a shell command.",
+        {"command": {"type": "string"}},
+        ["command"],
+    ),
+    "read_file": _tool(
+        "read_file",
+        "Read file contents.",
+        {"path": {"type": "string"}, "limit": {"type": "integer"}},
+        ["path"],
+    ),
+    "write_file": _tool(
+        "write_file",
+        "Write content to file.",
+        {"path": {"type": "string"}, "content": {"type": "string"}},
+        ["path", "content"],
+    ),
+    "edit_file": _tool(
+        "edit_file",
+        "Replace exact text in file.",
+        {
+            "path": {"type": "string"},
+            "old_text": {"type": "string"},
+            "new_text": {"type": "string"},
         },
-    },
-    {
-        "name": "edit_file",
-        "description": "Replace exact text in file.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "path": {"type": "string"},
-                "old_text": {"type": "string"},
-                "new_text": {"type": "string"},
-            },
-            "required": ["path", "old_text", "new_text"],
+        ["path", "old_text", "new_text"],
+    ),
+    "glob": _tool(
+        "glob",
+        "Find files by glob pattern.",
+        {"pattern": {"type": "string"}, "path": {"type": "string"}},
+        ["pattern"],
+    ),
+    "grep": _tool(
+        "grep",
+        "Search for patterns in file contents using regex.",
+        {
+            "pattern": {"type": "string"},
+            "path": {"type": "string"},
+            "file_pattern": {"type": "string"},
+            "ignore_case": {"type": "boolean"},
         },
-    },
-]
-
-
-# Task management tools
-TASK_TOOLS: List[Dict[str, Any]] = [
-    {
-        "name": "TodoWrite",
-        "description": "Update task tracking list.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
+        ["pattern"],
+    ),
+    "TodoWrite": _tool(
+        "TodoWrite",
+        "Update task tracking list.",
+        {
+            "items": {
+                "type": "array",
                 "items": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "content": {"type": "string"},
-                            "status": {
-                                "type": "string",
-                                "enum": ["pending", "in_progress", "completed"],
-                            },
-                            "activeForm": {"type": "string"},
+                    "type": "object",
+                    "properties": {
+                        "content": {"type": "string"},
+                        "status": {
+                            "type": "string",
+                            "enum": ["pending", "in_progress", "completed"],
                         },
-                        "required": ["content", "status", "activeForm"],
+                        "activeForm": {"type": "string"},
                     },
-                }
-            },
-            "required": ["items"],
-        },
-    },
-    {
-        "name": "task",
-        "description": "Spawn a subagent for isolated exploration or work.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "prompt": {"type": "string"},
-                "agent_type": {"type": "string", "enum": ["Explore", "general-purpose"]},
-            },
-            "required": ["prompt"],
-        },
-    },
-    {
-        "name": "load_skill",
-        "description": "Load specialized knowledge by name.",
-        "input_schema": {
-            "type": "object",
-            "properties": {"name": {"type": "string"}},
-            "required": ["name"],
-        },
-    },
-    {
-        "name": "compress",
-        "description": "Manually compress conversation context.",
-        "input_schema": {"type": "object", "properties": {}},
-    },
-]
-
-
-# Background task tools
-BACKGROUND_TOOLS: List[Dict[str, Any]] = [
-    {
-        "name": "background_run",
-        "description": "Run command in background thread.",
-        "input_schema": {
-            "type": "object",
-            "properties": {"command": {"type": "string"}, "timeout": {"type": "integer"}},
-            "required": ["command"],
-        },
-    },
-    {
-        "name": "check_background",
-        "description": "Check background task status.",
-        "input_schema": {"type": "object", "properties": {"task_id": {"type": "string"}}},
-    },
-]
-
-
-# Web tools (network access)
-WEB_TOOLS: List[Dict[str, Any]] = [
-    {
-        "name": "web_fetch",
-        "description": "Fetch content from a URL.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "url": {"type": "string"},
-                "timeout": {"type": "integer"},
-            },
-            "required": ["url"],
-        },
-    },
-    {
-        "name": "web_search",
-        "description": "Search the web for information.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string"},
-                "num_results": {"type": "integer"},
-                "timeout": {"type": "integer"},
-            },
-            "required": ["query"],
-        },
-    },
-]
-
-
-# Persistent task management tools
-PERSISTENT_TASK_TOOLS: List[Dict[str, Any]] = [
-    {
-        "name": "background_run",
-        "description": "Run command in background thread.",
-        "input_schema": {
-            "type": "object",
-            "properties": {"command": {"type": "string"}, "timeout": {"type": "integer"}},
-            "required": ["command"],
-        },
-    },
-    {
-        "name": "check_background",
-        "description": "Check background task status.",
-        "input_schema": {"type": "object", "properties": {"task_id": {"type": "string"}}},
-    },
-]
-
-
-# Persistent task management tools
-PERSISTENT_TASK_TOOLS: List[Dict[str, Any]] = [
-    {
-        "name": "task_create",
-        "description": "Create a persistent file task.",
-        "input_schema": {
-            "type": "object",
-            "properties": {"subject": {"type": "string"}, "description": {"type": "string"}},
-            "required": ["subject"],
-        },
-    },
-    {
-        "name": "task_get",
-        "description": "Get task details by ID.",
-        "input_schema": {
-            "type": "object",
-            "properties": {"task_id": {"type": "integer"}},
-            "required": ["task_id"],
-        },
-    },
-    {
-        "name": "task_update",
-        "description": "Update task status or dependencies.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "task_id": {"type": "integer"},
-                "status": {
-                    "type": "string",
-                    "enum": ["pending", "in_progress", "completed", "deleted"],
+                    "required": ["content", "status", "activeForm"],
                 },
-                "add_blocked_by": {"type": "array", "items": {"type": "integer"}},
-                "add_blocks": {"type": "array", "items": {"type": "integer"}},
-            },
-            "required": ["task_id"],
+            }
         },
-    },
-    {
-        "name": "task_list",
-        "description": "List all tasks.",
-        "input_schema": {"type": "object", "properties": {}},
-    },
+        ["items"],
+    ),
+    "task": _tool(
+        "task",
+        "Spawn a subagent for isolated exploration or work.",
+        {
+            "prompt": {"type": "string"},
+            "agent_type": {"type": "string", "enum": ["Explore", "general-purpose"]},
+        },
+        ["prompt"],
+    ),
+    "load_skill": _tool(
+        "load_skill",
+        "Load specialized knowledge by name.",
+        {"name": {"type": "string"}},
+        ["name"],
+    ),
+    "compress": _tool(
+        "compress",
+        "Manually compress conversation context.",
+        {},
+    ),
+    "background_run": _tool(
+        "background_run",
+        "Run command in background thread.",
+        {"command": {"type": "string"}, "timeout": {"type": "integer"}},
+        ["command"],
+    ),
+    "check_background": _tool(
+        "check_background",
+        "Check background task status.",
+        {"task_id": {"type": "string"}},
+    ),
+    "web_fetch": _tool(
+        "web_fetch",
+        "Fetch content from a URL.",
+        {"url": {"type": "string"}, "timeout": {"type": "integer"}},
+        ["url"],
+    ),
+    "web_search": _tool(
+        "web_search",
+        "Search the web for information.",
+        {
+            "query": {"type": "string"},
+            "num_results": {"type": "integer"},
+            "timeout": {"type": "integer"},
+        },
+        ["query"],
+    ),
+    "task_create": _tool(
+        "task_create",
+        "Create a persistent file task.",
+        {"subject": {"type": "string"}, "description": {"type": "string"}},
+        ["subject"],
+    ),
+    "task_get": _tool(
+        "task_get",
+        "Get task details by ID.",
+        {"task_id": {"type": "integer"}},
+        ["task_id"],
+    ),
+    "task_update": _tool(
+        "task_update",
+        "Update task status or dependencies.",
+        {
+            "task_id": {"type": "integer"},
+            "status": {
+                "type": "string",
+                "enum": ["pending", "in_progress", "completed", "deleted"],
+            },
+            "add_blocked_by": {"type": "array", "items": {"type": "integer"}},
+            "add_blocks": {"type": "array", "items": {"type": "integer"}},
+        },
+        ["task_id"],
+    ),
+    "task_list": _tool(
+        "task_list",
+        "List all tasks.",
+        {},
+    ),
+    "spawn_teammate": _tool(
+        "spawn_teammate",
+        "Spawn a persistent autonomous teammate.",
+        {
+            "name": {"type": "string"},
+            "role": {"type": "string"},
+            "prompt": {"type": "string"},
+        },
+        ["name", "role", "prompt"],
+    ),
+    "list_teammates": _tool(
+        "list_teammates",
+        "List all teammates.",
+        {},
+    ),
+    "send_message": _tool(
+        "send_message",
+        "Send a message to a teammate.",
+        {
+            "to": {"type": "string"},
+            "content": {"type": "string"},
+            "msg_type": {"type": "string"},
+        },
+        ["to", "content"],
+    ),
+    "read_inbox": _tool(
+        "read_inbox",
+        "Read and drain the lead's inbox.",
+        {},
+    ),
+    "broadcast": _tool(
+        "broadcast",
+        "Send message to all teammates.",
+        {"content": {"type": "string"}},
+        ["content"],
+    ),
+    "shutdown_request": _tool(
+        "shutdown_request",
+        "Request a teammate to shut down.",
+        {"teammate": {"type": "string"}},
+        ["teammate"],
+    ),
+    "plan_approval": _tool(
+        "plan_approval",
+        "Approve or reject a teammate's plan.",
+        {
+            "request_id": {"type": "string"},
+            "approve": {"type": "boolean"},
+            "feedback": {"type": "string"},
+        },
+        ["request_id", "approve"],
+    ),
+    "idle": _tool(
+        "idle",
+        "Enter idle state.",
+        {},
+    ),
+    "claim_task": _tool(
+        "claim_task",
+        "Claim a task from the board.",
+        {"task_id": {"type": "integer"}},
+        ["task_id"],
+    ),
+}
+
+
+TOOL_GROUPS: Dict[str, List[str]] = {
+    "basic": ["bash", "read_file", "glob", "grep"],
+    "write": ["write_file", "edit_file"],
+    "tasking": ["TodoWrite", "task", "load_skill", "compress"],
+    "background": ["background_run", "check_background"],
+    "web": ["web_fetch", "web_search"],
+    "persistent_tasks": ["task_create", "task_get", "task_update", "task_list"],
+    "collaboration": [
+        "spawn_teammate",
+        "list_teammates",
+        "send_message",
+        "read_inbox",
+        "broadcast",
+        "shutdown_request",
+        "plan_approval",
+    ],
+    "workflow": ["idle", "claim_task"],
+}
+
+SUBAGENT_TOOL_NAMES: Dict[str, List[str]] = {
+    "Explore": ["bash", "read_file", "glob", "grep"],
+    "general-purpose": ["bash", "read_file", "glob", "grep", "write_file", "edit_file"],
+}
+
+TEAMMATE_TOOL_NAMES: List[str] = [
+    "bash",
+    "read_file",
+    "glob",
+    "grep",
+    "write_file",
+    "edit_file",
+    "idle",
+    "claim_task",
+    "send_message",
 ]
 
-
-# Collaboration tools
-COLLABORATION_TOOLS: List[Dict[str, Any]] = [
-    {
-        "name": "spawn_teammate",
-        "description": "Spawn a persistent autonomous teammate.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "name": {"type": "string"},
-                "role": {"type": "string"},
-                "prompt": {"type": "string"},
-            },
-            "required": ["name", "role", "prompt"],
-        },
-    },
-    {
-        "name": "list_teammates",
-        "description": "List all teammates.",
-        "input_schema": {"type": "object", "properties": {}},
-    },
-    {
-        "name": "send_message",
-        "description": "Send a message to a teammate.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "to": {"type": "string"},
-                "content": {"type": "string"},
-                "msg_type": {"type": "string"},
-            },
-            "required": ["to", "content"],
-        },
-    },
-    {
-        "name": "read_inbox",
-        "description": "Read and drain the lead's inbox.",
-        "input_schema": {"type": "object", "properties": {}},
-    },
-    {
-        "name": "broadcast",
-        "description": "Send message to all teammates.",
-        "input_schema": {
-            "type": "object",
-            "properties": {"content": {"type": "string"}},
-            "required": ["content"],
-        },
-    },
-    {
-        "name": "shutdown_request",
-        "description": "Request a teammate to shut down.",
-        "input_schema": {
-            "type": "object",
-            "properties": {"teammate": {"type": "string"}},
-            "required": ["teammate"],
-        },
-    },
-    {
-        "name": "plan_approval",
-        "description": "Approve or reject a teammate's plan.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "request_id": {"type": "string"},
-                "approve": {"type": "boolean"},
-                "feedback": {"type": "string"},
-            },
-            "required": ["request_id", "approve"],
-        },
-    },
-]
+TOOL_RISK_LEVELS: Dict[str, str] = {
+    "write_file": "high",
+    "edit_file": "medium",
+    "bash": "medium",
+}
 
 
-# Workflow tools
-WORKFLOW_TOOLS: List[Dict[str, Any]] = [
-    {
-        "name": "idle",
-        "description": "Enter idle state.",
-        "input_schema": {"type": "object", "properties": {}},
-    },
-    {
-        "name": "claim_task",
-        "description": "Claim a task from the board.",
-        "input_schema": {
-            "type": "object",
-            "properties": {"task_id": {"type": "integer"}},
-            "required": ["task_id"],
-        },
-    },
-]
+def get_tools_by_names(names: Iterable[str]) -> List[Dict[str, Any]]:
+    """Return tool definitions for the provided ordered names."""
+    return [TOOL_SPECS[name] for name in names]
 
 
-# Tool collections for different use cases
 def get_all_tools() -> List[Dict[str, Any]]:
     """Get all available tools."""
-    return (
-        BASIC_TOOLS
-        + WRITE_TOOLS
-        + TASK_TOOLS
-        + BACKGROUND_TOOLS
-        + WEB_TOOLS
-        + PERSISTENT_TASK_TOOLS
-        + COLLABORATION_TOOLS
-        + WORKFLOW_TOOLS
-    )
+    ordered_names: List[str] = []
+    for group in TOOL_GROUPS.values():
+        ordered_names.extend(group)
+    return get_tools_by_names(ordered_names)
 
 
 def get_subagent_tools(agent_type: str = "Explore") -> List[Dict[str, Any]]:
-    """Get tools for subagent based on type.
+    """Get tools for subagents based on type."""
+    tool_names = SUBAGENT_TOOL_NAMES.get(agent_type, SUBAGENT_TOOL_NAMES["general-purpose"])
+    return get_tools_by_names(tool_names)
 
-    Args:
-        agent_type: Type of agent ("Explore" or other)
 
-    Returns:
-        List of tool definitions
-    """
-    if agent_type == "Explore":
-        return BASIC_TOOLS.copy()
-    return BASIC_TOOLS + WRITE_TOOLS
+def get_subagent_tool_names(agent_type: str = "Explore") -> List[str]:
+    """Get ordered tool names for a subagent type."""
+    return list(SUBAGENT_TOOL_NAMES.get(agent_type, SUBAGENT_TOOL_NAMES["general-purpose"]))
 
 
 def get_teammate_tools() -> List[Dict[str, Any]]:
     """Get tools for teammate agents."""
-    return (
-        BASIC_TOOLS
-        + WRITE_TOOLS
-        + [WORKFLOW_TOOLS[0]]  # idle
-        + [WORKFLOW_TOOLS[1]]  # claim_task
-        + [
-            {
-                "name": "send_message",
-                "description": "Send message.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "to": {"type": "string"},
-                        "content": {"type": "string"},
-                    },
-                    "required": ["to", "content"],
-                },
-            }
-        ]
-    )
+    return get_tools_by_names(TEAMMATE_TOOL_NAMES)
 
 
-# Export the full tool list for backward compatibility
 TOOLS = get_all_tools()

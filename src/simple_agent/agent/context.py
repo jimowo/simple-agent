@@ -11,6 +11,7 @@ from simple_agent.models.config import Settings
 from simple_agent.providers.base import BaseProvider
 
 if TYPE_CHECKING:
+    from simple_agent.core.container import ServiceContainer
     from simple_agent.interfaces.managers import (
         BackgroundManager,
         MemoryManager,
@@ -85,7 +86,13 @@ Skills available:
 {self.skill_loader.descriptions()}"""
 
     @classmethod
-    def from_container(cls, settings: Settings, **overrides):
+    def from_container(
+        cls,
+        settings: Settings,
+        *,
+        container: Optional["ServiceContainer"] = None,
+        **overrides,
+    ):
         """Create AgentContext from the service container.
 
         This factory method resolves all dependencies from the container,
@@ -97,18 +104,20 @@ Skills available:
         Returns:
             AgentContext instance with all dependencies resolved
         """
-        from simple_agent.core.container import get_container
+        from simple_agent.core.container import create_container
         from simple_agent.core.service_registration import _create_provider
 
-        container = get_container()
-        cls._register_container_overrides(container, settings, overrides)
+        container = container or create_container(
+            settings,
+            overrides=cls._build_container_overrides(overrides),
+        )
 
         resolved = cls._resolve_manager_dependencies(container, overrides)
         memory_mgr = cls._resolve_memory_manager(container, overrides)
 
         return cls.from_components(
             settings=settings,
-            provider=_create_provider(settings),
+            provider=overrides.get("provider") or _create_provider(settings),
             memory_mgr=memory_mgr,
             **resolved,
         )
@@ -145,8 +154,8 @@ Skills available:
         )
 
     @classmethod
-    def _register_container_overrides(cls, container, settings: Settings, overrides: dict) -> None:
-        """Register settings and explicit dependency overrides in the container."""
+    def _build_container_overrides(cls, overrides: dict) -> dict:
+        """Map context override field names to container interfaces."""
         from simple_agent.interfaces.managers import (
             BackgroundManager,
             MemoryManager,
@@ -159,8 +168,6 @@ Skills available:
             TodoManager,
         )
 
-        container.register_instance(Settings, settings)
-
         interface_map = {
             "todo": TodoManager,
             "task_mgr": TaskManager,
@@ -172,9 +179,11 @@ Skills available:
             "session_mgr": SessionManager,
             "memory_mgr": MemoryManager,
         }
-        for field_name, interface in interface_map.items():
-            if overrides.get(field_name) is not None:
-                container.register_instance(interface, overrides[field_name])
+        return {
+            interface: overrides[field_name]
+            for field_name, interface in interface_map.items()
+            if overrides.get(field_name) is not None
+        }
 
     @classmethod
     def _resolve_manager_dependencies(cls, container, overrides: dict) -> dict:

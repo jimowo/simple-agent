@@ -17,6 +17,14 @@ from simple_agent.models.projects import (
     SessionMetadata,
     SubagentMetadata,
 )
+from simple_agent.utils.path_utils import (
+    get_legacy_session_messages_file,
+    get_project_dir,
+    get_session_dir,
+    get_session_messages_file,
+    get_session_metadata_file,
+    get_session_subagents_dir,
+)
 
 
 class SessionManager(BaseManager):
@@ -41,7 +49,7 @@ class SessionManager(BaseManager):
             settings: Optional settings instance
         """
         super().__init__(settings)
-        self.projects_root = self.settings.workdir / ".simple" / "projects"
+        self.projects_root = self.settings.projects_root
         self.projects_root.mkdir(parents=True, exist_ok=True)
         self._current_session: Optional[SessionMetadata] = None
 
@@ -62,7 +70,7 @@ class SessionManager(BaseManager):
             SessionMetadata for the new session
         """
         session_id = str(uuid.uuid4())
-        project_dir = self.projects_root / project_id
+        project_dir = get_project_dir(self.projects_root, project_id)
         project_dir.mkdir(exist_ok=True)
 
         session = SessionMetadata(
@@ -73,9 +81,11 @@ class SessionManager(BaseManager):
         )
 
         # Create session directory structure
-        session_dir = project_dir / session_id
+        session_dir = get_session_dir(self.projects_root, project_id, session_id)
         session_dir.mkdir(exist_ok=True)
-        (session_dir / "subagents").mkdir(exist_ok=True)
+        get_session_subagents_dir(self.projects_root, project_id, session_id).mkdir(
+            exist_ok=True
+        )
 
         # Save session metadata
         self._save_session_metadata(project_dir, session)
@@ -100,8 +110,9 @@ class SessionManager(BaseManager):
         Returns:
             SessionMetadata if found, None otherwise
         """
-        project_dir = self.projects_root / project_id
-        session_file = project_dir / session_id / "session.json"
+        session_file = get_session_metadata_file(
+            self.projects_root, project_id, session_id
+        )
 
         if not session_file.exists():
             return None
@@ -125,8 +136,7 @@ class SessionManager(BaseManager):
             session_id: Session ID
             message: Message to append
         """
-        project_dir = self.projects_root / project_id
-        session_file = project_dir / f"{session_id}.jsonl"
+        session_file = self._ensure_session_messages_file(project_id, session_id)
 
         # Append message to jsonl file
         with open(session_file, "a", encoding="utf-8") as f:
@@ -137,6 +147,7 @@ class SessionManager(BaseManager):
         if session:
             session.message_count += 1
             session.last_updated = session.last_updated.now()
+            project_dir = get_project_dir(self.projects_root, project_id)
             self._save_session_metadata(project_dir, session)
 
             # Update current session if it's the same
@@ -159,8 +170,7 @@ class SessionManager(BaseManager):
         Returns:
             List of SessionMessage instances
         """
-        project_dir = self.projects_root / project_id
-        session_file = project_dir / f"{session_id}.jsonl"
+        session_file = self._resolve_session_messages_file(project_id, session_id)
 
         if not session_file.exists():
             return []
@@ -195,8 +205,7 @@ class SessionManager(BaseManager):
         Yields:
             SessionMessage instances one at a time
         """
-        project_dir = self.projects_root / project_id
-        session_file = project_dir / f"{session_id}.jsonl"
+        session_file = self._resolve_session_messages_file(project_id, session_id)
 
         if not session_file.exists():
             return
@@ -225,9 +234,9 @@ class SessionManager(BaseManager):
             agent_id: Subagent ID
             metadata: Subagent metadata to save
         """
-        project_dir = self.projects_root / project_id
         subagent_file = (
-            project_dir / session_id / "subagents" / f"agent-{agent_id}.meta.json"
+            get_session_subagents_dir(self.projects_root, project_id, session_id)
+            / f"agent-{agent_id}.meta.json"
         )
 
         subagent_file.parent.mkdir(parents=True, exist_ok=True)
@@ -252,7 +261,7 @@ class SessionManager(BaseManager):
         Returns:
             List of SessionMetadata instances
         """
-        project_dir = self.projects_root / project_id
+        project_dir = get_project_dir(self.projects_root, project_id)
 
         if not project_dir.exists():
             return []
@@ -302,7 +311,7 @@ class SessionManager(BaseManager):
             return None
 
         session.status = "archived"
-        project_dir = self.projects_root / project_id
+        project_dir = get_project_dir(self.projects_root, project_id)
         self._save_session_metadata(project_dir, session)
 
         return session
@@ -334,7 +343,9 @@ class SessionManager(BaseManager):
             project_dir: Project directory path
             session: Session to save
         """
-        session_file = project_dir / session.session_id / "session.json"
+        session_file = get_session_metadata_file(
+            self.projects_root, session.project_id, session.session_id
+        )
         session_file.write_text(
             session.model_dump_json(exclude_none=True, indent=2),
             encoding="utf-8",
@@ -358,3 +369,27 @@ class SessionManager(BaseManager):
             except (json.JSONDecodeError, ValueError):
                 # Skip if metadata is corrupted
                 pass
+
+    def _resolve_session_messages_file(self, project_id: str, session_id: str) -> Path:
+        """Resolve the canonical or legacy session messages file."""
+        canonical = get_session_messages_file(self.projects_root, project_id, session_id)
+        if canonical.exists():
+            return canonical
+
+        legacy = get_legacy_session_messages_file(self.projects_root, project_id, session_id)
+        if legacy.exists():
+            return legacy
+
+        return canonical
+
+    def _ensure_session_messages_file(self, project_id: str, session_id: str) -> Path:
+        """Ensure the canonical messages file exists, migrating legacy data if needed."""
+        canonical = get_session_messages_file(self.projects_root, project_id, session_id)
+        canonical.parent.mkdir(parents=True, exist_ok=True)
+
+        legacy = get_legacy_session_messages_file(self.projects_root, project_id, session_id)
+        if legacy.exists() and not canonical.exists():
+            canonical.write_text(legacy.read_text(encoding="utf-8"), encoding="utf-8")
+            legacy.unlink()
+
+        return canonical

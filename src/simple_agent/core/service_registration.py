@@ -121,11 +121,11 @@ def register_providers(container: ServiceContainer) -> None:
     # Provider factory - creates provider based on settings
     container.register_transient(
         BaseProvider,
-        lambda c: _create_provider(c.resolve(Settings)),
+        lambda c: create_provider_from_settings(c.resolve(Settings)),
     )
 
 
-def _create_provider(settings: Settings) -> BaseProvider:
+def create_provider_from_settings(settings: Settings) -> BaseProvider:
     """Create a provider instance from settings.
 
     This function extracts the provider configuration from settings
@@ -160,6 +160,10 @@ def _create_provider(settings: Settings) -> BaseProvider:
         base_url=provider_config.base_url,
         model=settings.model_id or None,
     )
+
+
+# Backward-compatible alias for older imports/tests.
+_create_provider = create_provider_from_settings
 
 
 def _create_memory_encoder(settings: Settings):

@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional, Type, TypeVar
 
 from simple_agent.exceptions import ServiceNotFoundError
+from simple_agent.models.config import Settings
 
 T = TypeVar("T")
 
@@ -149,6 +150,33 @@ class ServiceContainer:
 _container: Optional[ServiceContainer] = None
 
 
+def create_container(
+    settings: Optional[Settings] = None,
+    overrides: Optional[Dict[Type[Any], Any]] = None,
+) -> ServiceContainer:
+    """Create a scoped container instance.
+
+    Args:
+        settings: Optional Settings instance for this container.
+        overrides: Optional mapping of interface -> instance overrides.
+
+    Returns:
+        A newly configured ServiceContainer.
+    """
+    container = ServiceContainer()
+    _register_default_services(container)
+
+    if settings is not None:
+        container.register_instance(Settings, settings)
+
+    if overrides:
+        for interface, instance in overrides.items():
+            if instance is not None:
+                container.register_instance(interface, instance)
+
+    return container
+
+
 def get_container() -> ServiceContainer:
     """Get the global service container.
 
@@ -159,8 +187,7 @@ def get_container() -> ServiceContainer:
     """
     global _container
     if _container is None:
-        _container = ServiceContainer()
-        _register_default_services(_container)
+        _container = create_container()
     return _container
 
 

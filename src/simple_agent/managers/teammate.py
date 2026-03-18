@@ -3,12 +3,13 @@
 import json
 import threading
 import time
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
+from simple_agent.core.service_registration import create_provider_from_settings
 from simple_agent.managers.message import MessageBus
 from simple_agent.managers.task import TaskManager
 from simple_agent.models.config import Settings
-from simple_agent.providers import ProviderFactory
+from simple_agent.tools.search_tools import glob_files, grep_content
 from simple_agent.tools.bash_tools import run_bash
 from simple_agent.tools.file_tools import edit_file, read_file, write_file
 
@@ -20,17 +21,25 @@ plan_requests = {}
 class TeammateManager:
     """Manager for autonomous teammate agents."""
 
-    def __init__(self, bus: MessageBus, task_mgr: TaskManager, settings: Settings = None):
+    def __init__(
+        self,
+        bus: MessageBus,
+        task_mgr: TaskManager,
+        settings: Settings = None,
+        provider_factory: Optional[Callable[[Settings], Any]] = None,
+    ):
         """Initialize the teammate manager.
 
         Args:
             bus: Message bus for communication
             task_mgr: Task manager instance
             settings: Optional settings
+            provider_factory: Optional shared provider factory
         """
         self.settings = settings or Settings()
         self.bus = bus
         self.task_mgr = task_mgr
+        self._provider_factory = provider_factory or create_provider_from_settings
         self.team_dir = self.settings.team_dir
         self.team_dir.mkdir(exist_ok=True)
         self.config_path = self.team_dir / "config.json"
@@ -71,33 +80,7 @@ class TeammateManager:
         Returns:
             Provider instance
         """
-        provider_name = self.settings.get_active_provider()
-        provider_config = self.settings.get_provider_config(provider_name)
-
-        # Get API key from config or environment
-        api_key = provider_config.api_key
-        if not api_key:
-            # Try environment variable fallback
-            env_key_map = {
-                "anthropic": "ANTHROPIC_API_KEY",
-                "openai": "OPENAI_API_KEY",
-                "gemini": "GEMINI_API_KEY",
-                "groq": "GROQ_API_KEY",
-                "local": "dummy",
-            }
-            import os
-
-            api_key = os.getenv(env_key_map.get(provider_name, ""))
-
-        if not api_key and provider_name != "local":
-            raise ValueError(f"API key not found for provider '{provider_name}'.")
-
-        return ProviderFactory.create(
-            provider_name=provider_name,
-            api_key=api_key or "dummy",
-            base_url=provider_config.base_url,
-            model=self.settings.model_id or None,
-        )
+        return self._provider_factory(self.settings)
 
     def spawn(self, name: str, role: str, prompt: str) -> str:
         """Spawn a new teammate.
@@ -163,6 +146,13 @@ class TeammateManager:
             dispatch = {
                 "bash": lambda **kw: run_bash(kw["command"]),
                 "read_file": lambda **kw: read_file(kw["path"]),
+                "glob": lambda **kw: glob_files(kw["pattern"], kw.get("path")),
+                "grep": lambda **kw: grep_content(
+                    kw["pattern"],
+                    kw.get("path"),
+                    kw.get("file_pattern"),
+                    kw.get("ignore_case", False),
+                ),
                 "write_file": lambda **kw: write_file(kw["path"], kw["content"]),
                 "edit_file": lambda **kw: edit_file(kw["path"], kw["old_text"], kw["new_text"]),
             }

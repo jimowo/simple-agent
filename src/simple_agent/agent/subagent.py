@@ -9,6 +9,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from simple_agent.providers.base import BaseProvider
 from simple_agent.tools.handler_registry import ToolHandlerRegistry
+from simple_agent.tools.search_tools import glob_files, grep_content
 from simple_agent.utils.constants import MAX_TOOL_OUTPUT, LoopIterations
 
 
@@ -98,11 +99,9 @@ class SubAgentRunner:
         Returns:
             Dictionary mapping tool names to handler functions
         """
-        # Define available tools for each agent type
-        explore_tools = ["bash", "read_file"]
-        general_tools = ["bash", "read_file", "write_file", "edit_file"]
+        from simple_agent.tools.tool_definitions import get_subagent_tool_names
 
-        tool_names = explore_tools if agent_type == "Explore" else general_tools
+        tool_names = get_subagent_tool_names(agent_type)
 
         # Use ToolHandlerRegistry if available
         if self._tool_registry is not None:
@@ -115,6 +114,13 @@ class SubAgentRunner:
         handlers = {
             "bash": lambda **kw: run_bash(kw["command"]),
             "read_file": lambda **kw: read_file(kw["path"]),
+            "glob": lambda **kw: glob_files(kw["pattern"], kw.get("path")),
+            "grep": lambda **kw: grep_content(
+                kw["pattern"],
+                kw.get("path"),
+                kw.get("file_pattern"),
+                kw.get("ignore_case", False),
+            ),
         }
 
         # Add write/edit tools for non-Explore agents
