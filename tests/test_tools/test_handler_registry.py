@@ -1,12 +1,9 @@
 """Test ToolHandlerRegistry class."""
 
-from unittest.mock import Mock
 
 import pytest
 
-from simple_agent.agent.context import AgentContext
 from simple_agent.tools.handler_registry import ToolHandlerRegistry
-from simple_agent.tools.tool_definitions import TOOLS
 
 
 @pytest.mark.security

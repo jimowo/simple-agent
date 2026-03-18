@@ -1,6 +1,5 @@
 """Pytest configuration and shared fixtures for simple-agent tests."""
 
-import os
 import sys
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -123,7 +122,7 @@ def mock_provider():
     Returns:
         Mock provider with predefined responses
     """
-    from simple_agent.providers.base import BaseProvider, ProviderResponse, ToolCall
+    from simple_agent.providers.base import BaseProvider, ProviderResponse
 
     provider = Mock(spec=BaseProvider)
     provider.model = "test-model"
@@ -181,14 +180,14 @@ def initialized_context(mock_settings, mock_provider, mock_permission_manager):
         Fully initialized AgentContext
     """
     from simple_agent.agent.context import AgentContext
-    from simple_agent.managers.todo import TodoManager
-    from simple_agent.managers.task import TaskManager
     from simple_agent.managers.background import BackgroundManager
     from simple_agent.managers.message import MessageBus
-    from simple_agent.managers.teammate import TeammateManager
-    from simple_agent.managers.skill import SkillLoader
     from simple_agent.managers.project import ProjectManager
     from simple_agent.managers.session import SessionManager
+    from simple_agent.managers.skill import SkillLoader
+    from simple_agent.managers.task import TaskManager
+    from simple_agent.managers.teammate import TeammateManager
+    from simple_agent.managers.todo import TodoManager
     # Create real manager instances with test settings
     todo = TodoManager()
     task = TaskManager(mock_settings)

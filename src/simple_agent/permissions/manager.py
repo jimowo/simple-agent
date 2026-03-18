@@ -14,6 +14,28 @@ from simple_agent.tools.tool_definitions import TOOL_RISK_LEVELS
 USE_PROMPT_TOOLKIT = True
 
 
+def _render_permission_panel(request: PermissionRequest) -> None:
+    """Render the permission warning panel once."""
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.text import Text
+
+    console = Console()
+    console.line()
+    console.line()
+
+    panel_content = Text()
+    panel_content.append("Permission Required\n", style="bold yellow")
+    panel_content.append(f"Reason: {request.reason}\n")
+    panel_content.append(f"Tool: {request.tool}\n", style="cyan")
+    panel_content.append(f"Risk: {request.risk_level}\n", style="red")
+    if request.params:
+        panel_content.append(f"Parameters: {request._format_params()}\n", style="dim")
+
+    console.print(Panel(panel_content, title="[yellow]WARNING[/yellow]", border_style="yellow"))
+    console.line()
+
+
 def show_permission_help() -> None:
     """Show help for permission choices."""
     from rich.console import Console
@@ -38,6 +60,7 @@ def show_permission_help() -> None:
 def prompt_with_prompt_toolkit(
     request: PermissionRequest,
     *,
+    show_panel: bool = True,
     on_always: Optional[Callable[[], None]] = None,
     on_deny: Optional[Callable[[], None]] = None,
 ) -> PermissionResponse:
@@ -45,24 +68,9 @@ def prompt_with_prompt_toolkit(
     from prompt_toolkit import HTML, PromptSession
     from prompt_toolkit.completion import WordCompleter
     from prompt_toolkit.validation import ValidationError, Validator
-    from rich.console import Console
-    from rich.panel import Panel
-    from rich.text import Text
 
-    console = Console()
-    console.line()
-    console.line()
-
-    panel_content = Text()
-    panel_content.append("Permission Required\n", style="bold yellow")
-    panel_content.append(f"Reason: {request.reason}\n")
-    panel_content.append(f"Tool: {request.tool}\n", style="cyan")
-    panel_content.append(f"Risk: {request.risk_level}\n", style="red")
-    if request.params:
-        panel_content.append(f"Parameters: {request._format_params()}\n", style="dim")
-
-    console.print(Panel(panel_content, title="[yellow]WARNING[/yellow]", border_style="yellow"))
-    console.line()
+    if show_panel:
+        _render_permission_panel(request)
 
     class ChoiceValidator(Validator):
         def __init__(self) -> None:
@@ -114,34 +122,20 @@ def prompt_with_prompt_toolkit(
 def prompt_basic(
     request: PermissionRequest,
     *,
+    show_panel: bool = True,
     on_always: Optional[Callable[[], None]] = None,
     on_deny: Optional[Callable[[], None]] = None,
 ) -> PermissionResponse:
     """Prompt for permission using basic console input."""
     try:
-        from rich.console import Console
-        from rich.panel import Panel
-        from rich.text import Text
-
-        console = Console()
-        console.line()
-        console.line()
-
-        panel_content = Text()
-        panel_content.append("Permission Required\n", style="bold yellow")
-        panel_content.append(f"Reason: {request.reason}\n")
-        panel_content.append(f"Tool: {request.tool}\n", style="cyan")
-        panel_content.append(f"Risk: {request.risk_level}\n", style="red")
-        if request.params:
-            panel_content.append(f"Parameters: {request._format_params()}\n", style="dim")
-
-        console.print(Panel(panel_content, title="[yellow]WARNING[/yellow]", border_style="yellow"))
-        console.line()
+        if show_panel:
+            _render_permission_panel(request)
     except Exception:
-        print("\n")
-        print(f"[PERMISSION] {request.reason}")
-        print(f"  Tool: {request.tool}")
-        print(f"  Risk: {request.risk_level}")
+        if show_panel:
+            print("\n")
+            print(f"[PERMISSION] {request.reason}")
+            print(f"  Tool: {request.tool}")
+            print(f"  Risk: {request.risk_level}")
 
     while True:
         try:
@@ -181,17 +175,20 @@ def prompt_for_permission(
         try:
             return prompt_with_prompt_toolkit(
                 request,
+                show_panel=True,
                 on_always=on_always,
                 on_deny=on_deny,
             )
         except Exception:
             return prompt_basic(
                 request,
+                show_panel=False,
                 on_always=on_always,
                 on_deny=on_deny,
             )
     return prompt_basic(
         request,
+        show_panel=True,
         on_always=on_always,
         on_deny=on_deny,
     )

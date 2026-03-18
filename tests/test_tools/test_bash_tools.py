@@ -1,8 +1,9 @@
 """Test bash command execution tools."""
 
-import pytest
 from pathlib import Path
-from unittest.mock import patch, Mock
+from unittest.mock import Mock, patch
+
+import pytest
 
 from simple_agent.tools.bash_tools import run_bash
 

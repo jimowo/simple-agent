@@ -1,12 +1,14 @@
 """Test permission manager functionality."""
 
-import pytest
 from unittest.mock import Mock, patch
 
+import pytest
+
 from simple_agent.permissions.manager import (
+    NoOpStatusController,
     PermissionManager,
     PermissionRule,
-    NoOpStatusController,
+    prompt_for_permission,
 )
 from simple_agent.permissions.models import (
     PermissionPolicy,
@@ -228,3 +230,40 @@ class TestNoOpStatusController:
         controller.pause()
         controller.resume()
         assert True
+
+
+@pytest.mark.security
+class TestPermissionPromptFallback:
+    """Test prompt fallback behavior."""
+
+    def test_prompt_fallback_does_not_render_panel_twice(self):
+        """Fallback to basic prompt should reuse the already-rendered panel."""
+        request = PermissionRequest(
+            tool="bash",
+            params={"command": "ls -la"},
+            risk_level="high",
+            reason="Dangerous command execution may have system-wide effects",
+        )
+
+        with patch(
+            "simple_agent.permissions.manager.prompt_with_prompt_toolkit",
+            side_effect=RuntimeError("prompt_toolkit unavailable"),
+        ) as mock_toolkit, patch(
+            "simple_agent.permissions.manager.prompt_basic",
+            return_value=PermissionResponse(allowed=True),
+        ) as mock_basic:
+            response = prompt_for_permission(request)
+
+        assert response.allowed is True
+        mock_toolkit.assert_called_once_with(
+            request,
+            show_panel=True,
+            on_always=None,
+            on_deny=None,
+        )
+        mock_basic.assert_called_once_with(
+            request,
+            show_panel=False,
+            on_always=None,
+            on_deny=None,
+        )

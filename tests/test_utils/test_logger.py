@@ -1,15 +1,14 @@
 """Test logging configuration using loguru."""
 
+
 import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 from simple_agent.utils.logger import (
+    LoggerMixin,
+    get_logger,
+    logger,
     setup_logger,
     shutdown_logger,
-    get_logger,
-    LoggerMixin,
-    logger,
 )
 
 

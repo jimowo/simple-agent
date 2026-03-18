@@ -1,11 +1,12 @@
 """Test OpenAI provider with focus on security."""
 
 import json
-import pytest
 from unittest.mock import Mock
 
-from simple_agent.providers.openai import OpenAIProvider
+import pytest
+
 from simple_agent.providers.base import ToolCall
+from simple_agent.providers.openai import OpenAIProvider
 
 
 @pytest.mark.security

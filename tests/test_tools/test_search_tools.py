@@ -1,6 +1,5 @@
 """Test search tools (glob and grep)."""
 
-from pathlib import Path
 
 import pytest
 

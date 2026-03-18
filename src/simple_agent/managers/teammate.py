@@ -9,9 +9,9 @@ from simple_agent.core.service_registration import create_provider_from_settings
 from simple_agent.managers.message import MessageBus
 from simple_agent.managers.task import TaskManager
 from simple_agent.models.config import Settings
-from simple_agent.tools.search_tools import glob_files, grep_content
 from simple_agent.tools.bash_tools import run_bash
 from simple_agent.tools.file_tools import edit_file, read_file, write_file
+from simple_agent.tools.search_tools import glob_files, grep_content
 
 # Global shutdown and plan tracking
 shutdown_requests = {}

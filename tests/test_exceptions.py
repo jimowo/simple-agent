@@ -3,48 +3,41 @@
 import pytest
 
 from simple_agent.exceptions import (
-    # Base
-    SimpleAgentError,
-
+    CommandInjectionError,
     # Configuration
     ConfigurationError,
+    # Container
+    ContainerError,
+    InvalidModelError,
+    InvalidPolicyError,
     InvalidProviderError,
     MissingApiKeyError,
-    InvalidModelError,
-
-    # Security
-    SecurityError,
     PathTraversalError,
-    CommandInjectionError,
-    UnsafeCommandError,
-
-    # Tools
-    ToolError,
-    ToolExecutionError,
-    ToolTimeoutError,
-    ToolNotFoundError,
-
+    PermissionDeniedError,
+    # Permissions
+    PermissionError,
+    ProviderConnectionError,
     # Providers
     ProviderError,
-    ProviderConnectionError,
     ProviderResponseError,
     RateLimitError,
-
+    # Security
+    SecurityError,
+    ServiceNotFoundError,
+    ServiceValidationError,
+    # Base
+    SimpleAgentError,
     # Tasks
     TaskError,
     TaskNotFoundError,
     TaskValidationError,
     TodoLimitError,
-
-    # Permissions
-    PermissionError,
-    PermissionDeniedError,
-    InvalidPolicyError,
-
-    # Container
-    ContainerError,
-    ServiceNotFoundError,
-    ServiceValidationError,
+    # Tools
+    ToolError,
+    ToolExecutionError,
+    ToolNotFoundError,
+    ToolTimeoutError,
+    UnsafeCommandError,
 )
 
 

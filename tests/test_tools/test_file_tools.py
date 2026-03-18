@@ -1,9 +1,9 @@
 """Test file operation tools."""
 
-import pytest
-from pathlib import Path
 
-from simple_agent.tools.file_tools import read_file, write_file, edit_file
+import pytest
+
+from simple_agent.tools.file_tools import edit_file, read_file, write_file
 
 
 @pytest.mark.security

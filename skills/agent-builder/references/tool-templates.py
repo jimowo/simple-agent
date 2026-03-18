@@ -6,8 +6,8 @@ Each tool needs:
 2. Implementation (Python function)
 """
 
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 WORKDIR = Path.cwd()
 

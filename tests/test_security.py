@@ -6,14 +6,15 @@ This module tests security-critical functionality including:
 - Command injection prevention
 """
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from simple_agent.exceptions import PathTraversalError
 from simple_agent.utils.safety import (
+    CommandValidator,
     is_dangerous_command,
     safe_path,
-    CommandValidator,
 )
 
 

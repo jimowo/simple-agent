@@ -12,14 +12,14 @@ class TestAgentContext:
 
     def test_create_context(self, mock_settings, mock_provider):
         """Test creating an AgentContext."""
-        from simple_agent.managers.todo import TodoManager
-        from simple_agent.managers.task import TaskManager
         from simple_agent.managers.background import BackgroundManager
         from simple_agent.managers.message import MessageBus
-        from simple_agent.managers.skill import SkillLoader
-        from simple_agent.managers.teammate import TeammateManager
         from simple_agent.managers.project import ProjectManager
         from simple_agent.managers.session import SessionManager
+        from simple_agent.managers.skill import SkillLoader
+        from simple_agent.managers.task import TaskManager
+        from simple_agent.managers.teammate import TeammateManager
+        from simple_agent.managers.todo import TodoManager
 
         todo = TodoManager()
         task = TaskManager(mock_settings)
@@ -72,14 +72,14 @@ class TestAgentContext:
 
     def test_from_components(self, mock_settings, mock_provider):
         """Test creating context from already-resolved dependencies."""
-        from simple_agent.managers.todo import TodoManager
-        from simple_agent.managers.task import TaskManager
         from simple_agent.managers.background import BackgroundManager
         from simple_agent.managers.message import MessageBus
-        from simple_agent.managers.skill import SkillLoader
-        from simple_agent.managers.teammate import TeammateManager
         from simple_agent.managers.project import ProjectManager
         from simple_agent.managers.session import SessionManager
+        from simple_agent.managers.skill import SkillLoader
+        from simple_agent.managers.task import TaskManager
+        from simple_agent.managers.teammate import TeammateManager
+        from simple_agent.managers.todo import TodoManager
 
         todo = TodoManager()
         task = TaskManager(mock_settings)
@@ -112,7 +112,6 @@ class TestAgentContext:
     def test_from_container(self, temp_workspace):
         """Test creating context from service container."""
         from simple_agent.core.container import reset_container
-        from simple_agent.core.service_registration import _create_provider
 
         # Reset to ensure clean state
         reset_container()

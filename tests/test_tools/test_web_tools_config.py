@@ -1,6 +1,5 @@
 """Test configurable search API functionality."""
 
-import os
 
 import pytest
 

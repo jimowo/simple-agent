@@ -5,8 +5,8 @@ The key insight: spawn child agents with ISOLATED context to prevent
 "context pollution" where exploration details fill up the main conversation.
 """
 
-import time
 import sys
+import time
 
 # Assuming client, MODEL, execute_tool are defined elsewhere
 
