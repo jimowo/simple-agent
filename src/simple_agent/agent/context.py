@@ -59,6 +59,17 @@ class AgentContext:
     memory_mgr: Optional["MemoryManager"]
     provider: BaseProvider
 
+    _DEPENDENCY_FIELDS = (
+        "todo",
+        "task_mgr",
+        "bg",
+        "bus",
+        "skill_loader",
+        "teammate",
+        "project_mgr",
+        "session_mgr",
+    )
+
     @property
     def system_prompt(self) -> str:
         """Get system prompt for the agent.
@@ -88,6 +99,54 @@ Skills available:
         """
         from simple_agent.core.container import get_container
         from simple_agent.core.service_registration import _create_provider
+
+        container = get_container()
+        cls._register_container_overrides(container, settings, overrides)
+
+        resolved = cls._resolve_manager_dependencies(container, overrides)
+        memory_mgr = cls._resolve_memory_manager(container, overrides)
+
+        return cls.from_components(
+            settings=settings,
+            provider=_create_provider(settings),
+            memory_mgr=memory_mgr,
+            **resolved,
+        )
+
+    @classmethod
+    def from_components(
+        cls,
+        *,
+        settings: Settings,
+        provider: BaseProvider,
+        todo,
+        task_mgr,
+        bg,
+        bus,
+        skill_loader,
+        teammate,
+        project_mgr,
+        session_mgr,
+        memory_mgr=None,
+    ):
+        """Create AgentContext from already-resolved dependencies."""
+        return cls(
+            settings=settings,
+            todo=todo,
+            task_mgr=task_mgr,
+            bg=bg,
+            bus=bus,
+            skill_loader=skill_loader,
+            teammate=teammate,
+            project_mgr=project_mgr,
+            session_mgr=session_mgr,
+            memory_mgr=memory_mgr,
+            provider=provider,
+        )
+
+    @classmethod
+    def _register_container_overrides(cls, container, settings: Settings, overrides: dict) -> None:
+        """Register settings and explicit dependency overrides in the container."""
         from simple_agent.interfaces.managers import (
             BackgroundManager,
             MemoryManager,
@@ -100,12 +159,8 @@ Skills available:
             TodoManager,
         )
 
-        container = get_container()
-
-        # Override Settings with the provided one
         container.register_instance(Settings, settings)
 
-        # Override selected manager instances when the caller needs shared state.
         interface_map = {
             "todo": TodoManager,
             "task_mgr": TaskManager,
@@ -121,27 +176,44 @@ Skills available:
             if overrides.get(field_name) is not None:
                 container.register_instance(interface, overrides[field_name])
 
-        # Resolve all dependencies
-        provider = _create_provider(settings)
-
-        # Resolve MemoryManager (may be None if disabled)
-        memory_mgr = overrides.get("memory_mgr")
-        if memory_mgr is None:
-            try:
-                memory_mgr = container.resolve(MemoryManager)
-            except Exception:
-                pass  # Memory manager is optional
-
-        return cls(
-            settings=settings,
-            todo=overrides.get("todo") or container.resolve(TodoManager),
-            task_mgr=overrides.get("task_mgr") or container.resolve(TaskManager),
-            bg=overrides.get("bg") or container.resolve(BackgroundManager),
-            bus=overrides.get("bus") or container.resolve(MessageBus),
-            skill_loader=overrides.get("skill_loader") or container.resolve(SkillLoader),
-            teammate=overrides.get("teammate") or container.resolve(TeammateManager),
-            project_mgr=overrides.get("project_mgr") or container.resolve(ProjectManager),
-            session_mgr=overrides.get("session_mgr") or container.resolve(SessionManager),
-            memory_mgr=memory_mgr,
-            provider=provider,
+    @classmethod
+    def _resolve_manager_dependencies(cls, container, overrides: dict) -> dict:
+        """Resolve required manager dependencies from the container."""
+        from simple_agent.interfaces.managers import (
+            BackgroundManager,
+            MessageBus,
+            ProjectManager,
+            SessionManager,
+            SkillLoader,
+            TaskManager,
+            TeammateManager,
+            TodoManager,
         )
+
+        interface_map = {
+            "todo": TodoManager,
+            "task_mgr": TaskManager,
+            "bg": BackgroundManager,
+            "bus": MessageBus,
+            "skill_loader": SkillLoader,
+            "teammate": TeammateManager,
+            "project_mgr": ProjectManager,
+            "session_mgr": SessionManager,
+        }
+        return {
+            field_name: overrides.get(field_name) or container.resolve(interface)
+            for field_name, interface in interface_map.items()
+        }
+
+    @classmethod
+    def _resolve_memory_manager(cls, container, overrides: dict):
+        """Resolve the optional memory manager dependency."""
+        if overrides.get("memory_mgr") is not None:
+            return overrides["memory_mgr"]
+
+        from simple_agent.interfaces.managers import MemoryManager
+
+        try:
+            return container.resolve(MemoryManager)
+        except Exception:
+            return None

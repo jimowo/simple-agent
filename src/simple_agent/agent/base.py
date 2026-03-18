@@ -82,6 +82,15 @@ class Agent:
     following the Dependency Inversion Principle (DIP).
     """
 
+    _LEGACY_MANAGER_FIELDS = (
+        "todo_manager",
+        "task_manager",
+        "background_manager",
+        "message_bus",
+        "teammate_manager",
+        "skill_loader",
+    )
+
     def __init__(
         self,
         settings: Optional[Settings] = None,
@@ -108,41 +117,75 @@ class Agent:
             skill_loader: Legacy parameter for backward compatibility
             permission_manager: Optional pre-configured permission manager
         """
-        # Use provided context or create from settings
+        resolved_settings = settings or Settings()
+        self._ctx = self._resolve_context(
+            resolved_settings,
+            context=context,
+            todo_manager=todo_manager,
+            task_manager=task_manager,
+            background_manager=background_manager,
+            message_bus=message_bus,
+            teammate_manager=teammate_manager,
+            skill_loader=skill_loader,
+        )
+        self._permission_manager = self._resolve_permission_manager(permission_manager)
+        self._tool_registry = self._create_tool_registry(self._ctx, self._permission_manager)
+        self._initialize_legacy_handlers(self._permission_manager)
+
+    def _resolve_context(
+        self,
+        settings: Settings,
+        *,
+        context: Optional[AgentContext],
+        todo_manager,
+        task_manager,
+        background_manager,
+        message_bus,
+        teammate_manager,
+        skill_loader,
+    ) -> AgentContext:
+        """Resolve the active AgentContext from modern or legacy inputs."""
         if context is not None:
-            self._ctx = context
-        else:
-            # Check for legacy-style initialization
-            if any(
-                x is not None
-                for x in [
-                    todo_manager,
-                    task_manager,
-                    background_manager,
-                    message_bus,
-                    teammate_manager,
-                    skill_loader,
-                ]
-            ):
-                # Legacy mode: create context from provided managers
-                self._ctx = self._create_legacy_context(
-                    settings or Settings(),
-                    todo_manager,
-                    task_manager,
-                    background_manager,
-                    message_bus,
-                    teammate_manager,
-                    skill_loader,
-                )
-            else:
-                # Modern mode: create context from settings using container
-                self._ctx = AgentContext.from_container(settings or Settings())
+            return context
 
-        # Store permission manager for later use
-        self._external_permission_manager = permission_manager
+        if self._has_legacy_manager_overrides(
+            todo_manager=todo_manager,
+            task_manager=task_manager,
+            background_manager=background_manager,
+            message_bus=message_bus,
+            teammate_manager=teammate_manager,
+            skill_loader=skill_loader,
+        ):
+            return self._create_legacy_context(
+                settings,
+                todo_manager,
+                task_manager,
+                background_manager,
+                message_bus,
+                teammate_manager,
+                skill_loader,
+            )
 
-        # Initialize tool handlers with managers from context
-        self._initialize_tool_handlers()
+        return AgentContext.from_container(settings)
+
+    def _has_legacy_manager_overrides(self, **manager_overrides) -> bool:
+        """Check whether legacy-style manager injection is in use."""
+        return any(manager_overrides[field] is not None for field in self._LEGACY_MANAGER_FIELDS)
+
+    def _resolve_permission_manager(self, permission_manager):
+        """Resolve the permission manager used by this agent."""
+        if permission_manager is not None:
+            return permission_manager
+
+        from simple_agent.permissions import PermissionManager
+
+        return PermissionManager()
+
+    def _create_tool_registry(self, context: AgentContext, permission_manager):
+        """Create the tool registry used by the agent loop and compatibility layer."""
+        from simple_agent.tools.handler_registry import ToolHandlerRegistry
+
+        return ToolHandlerRegistry(context, permission_manager)
 
     def _create_legacy_context(
         self,
@@ -172,9 +215,7 @@ class Agent:
             AgentContext with provided managers
         """
         from simple_agent.core.service_registration import _create_provider
-        from simple_agent.managers.background import (
-            BackgroundManager as BackgroundManagerImpl,
-        )
+        from simple_agent.managers.background import BackgroundManager as BackgroundManagerImpl
         from simple_agent.managers.message import MessageBus as MessageBusImpl
         from simple_agent.managers.project import ProjectManager as ProjectManagerImpl
         from simple_agent.managers.session import SessionManager as SessionManagerImpl
@@ -195,8 +236,9 @@ class Agent:
         session = SessionManagerImpl(settings)
         provider = _create_provider(settings)
 
-        return AgentContext(
+        return AgentContext.from_components(
             settings=settings,
+            provider=provider,
             todo=todo,
             task_mgr=task,
             bg=bg,
@@ -206,33 +248,7 @@ class Agent:
             project_mgr=project,
             session_mgr=session,
             memory_mgr=None,
-            provider=provider,
         )
-
-    def _initialize_tool_handlers(self) -> None:
-        """Initialize tool handlers with managers from context.
-
-        This creates a ToolHandlerRegistry using dependency injection,
-        following modern best practices. Global state initialization is
-        kept for backward compatibility only.
-        """
-        from simple_agent.permissions import PermissionManager
-        from simple_agent.tools.handler_registry import ToolHandlerRegistry
-
-        # Use provided permission manager or create a default one
-        if self._external_permission_manager is not None:
-            permission_manager = self._external_permission_manager
-        else:
-            permission_manager = PermissionManager()
-
-        # Create tool handler registry using dependency injection
-        self._tool_registry = ToolHandlerRegistry(self._ctx, permission_manager)
-
-        # Store permission manager for access
-        self._permission_manager = permission_manager
-
-        # Keep the old functional tool API pointed at the active registry.
-        self._initialize_legacy_handlers(permission_manager)
 
     def _initialize_legacy_handlers(self, permission_manager) -> None:
         """Initialize legacy global tool handlers for backward compatibility.

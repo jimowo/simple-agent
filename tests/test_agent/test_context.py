@@ -70,6 +70,45 @@ class TestAgentContext:
 
         assert "Skills available" in prompt
 
+    def test_from_components(self, mock_settings, mock_provider):
+        """Test creating context from already-resolved dependencies."""
+        from simple_agent.managers.todo import TodoManager
+        from simple_agent.managers.task import TaskManager
+        from simple_agent.managers.background import BackgroundManager
+        from simple_agent.managers.message import MessageBus
+        from simple_agent.managers.skill import SkillLoader
+        from simple_agent.managers.teammate import TeammateManager
+        from simple_agent.managers.project import ProjectManager
+        from simple_agent.managers.session import SessionManager
+
+        todo = TodoManager()
+        task = TaskManager(mock_settings)
+        bg = BackgroundManager(mock_settings)
+        bus = MessageBus(mock_settings)
+        skill = SkillLoader(settings=mock_settings)
+        teammate = TeammateManager(bus, task, mock_settings)
+        project = ProjectManager(mock_settings)
+        session = SessionManager(mock_settings)
+
+        context = AgentContext.from_components(
+            settings=mock_settings,
+            provider=mock_provider,
+            todo=todo,
+            task_mgr=task,
+            bg=bg,
+            bus=bus,
+            skill_loader=skill,
+            teammate=teammate,
+            project_mgr=project,
+            session_mgr=session,
+            memory_mgr=None,
+        )
+
+        assert context.settings is mock_settings
+        assert context.provider is mock_provider
+        assert context.project_mgr is project
+        assert context.session_mgr is session
+
     def test_from_container(self, temp_workspace):
         """Test creating context from service container."""
         from simple_agent.core.container import reset_container
