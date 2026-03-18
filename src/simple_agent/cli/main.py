@@ -10,6 +10,7 @@ from rich.markdown import Markdown
 from simple_agent.agent.base import Agent
 from simple_agent.agent.loop import AgentLoop
 from simple_agent.cli import InteractivePrompt
+from simple_agent.exceptions import SimpleAgentError
 from simple_agent.models.config import Settings, create_settings, initialize_config
 from simple_agent.permissions.manager import PermissionManager, prompt_for_permission
 from simple_agent.permissions.models import PermissionPolicy, PermissionRequest, PermissionResponse
@@ -22,6 +23,11 @@ app = typer.Typer(
     add_completion=False,
 )
 console = Console()
+
+
+def _print_cli_error(error: Exception) -> None:
+    """Render CLI errors consistently."""
+    console.print(f"[red]Error: {error}[/red]")
 
 
 def _extract_response_text(content) -> str:
@@ -355,8 +361,12 @@ def chat_command(
         status_controller.set_status(status)
         try:
             AgentLoop(agent._ctx, agent._tool_registry, agent.permission_manager).run(history)
+        except SimpleAgentError as e:
+            _print_cli_error(e)
+            status.stop()
+            continue
         except Exception as e:
-            console.print(f"[red]Error: {e}[/red]")
+            _print_cli_error(e)
             status.stop()
             continue
         status.stop()
@@ -423,9 +433,13 @@ def run_command(
     status_controller.set_status(status)
     try:
         AgentLoop(agent._ctx, agent._tool_registry, agent.permission_manager).run(history)
+    except SimpleAgentError as e:
+        status.stop()
+        _print_cli_error(e)
+        raise typer.Exit(1)
     except Exception as e:
         status.stop()
-        console.print(f"[red]Error: {e}[/red]")
+        _print_cli_error(e)
         raise typer.Exit(1)
     status.stop()
 
@@ -472,7 +486,11 @@ def task_get_command(
     agent = _get_agent(settings)
     import json
 
-    result = json.loads(agent.task_mgr.get(task_id))
+    try:
+        result = json.loads(agent.task_mgr.get(task_id))
+    except SimpleAgentError as e:
+        _print_cli_error(e)
+        raise typer.Exit(1)
     console.print(json.dumps(result, indent=2))
 
 
@@ -544,10 +562,11 @@ def project_info_command(
             return
         project_id = current.project_id
 
-    project = pm.get_project(project_id)
-    if not project:
-        console.print(f"[red]Project '{project_id}' not found.[/red]")
-        return
+    try:
+        project = pm.get_project_or_raise(project_id)
+    except SimpleAgentError as e:
+        _print_cli_error(e)
+        raise typer.Exit(1)
 
     console.print(f"\n[bold]Project: {project.project_id}[/bold]\n")
     console.print(f"  Path: {project.original_path}")
@@ -623,10 +642,11 @@ def session_show_command(
             return
         project_id = current.project_id
 
-    session = sm.get_session(project_id, session_id)
-    if not session:
-        console.print(f"[red]Session '{session_id}' not found.[/red]")
-        return
+    try:
+        session = sm.get_session_or_raise(project_id, session_id)
+    except SimpleAgentError as e:
+        _print_cli_error(e)
+        raise typer.Exit(1)
 
     messages = sm.read_messages(project_id, session_id, limit=limit)
 

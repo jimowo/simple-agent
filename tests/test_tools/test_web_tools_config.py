@@ -165,3 +165,10 @@ class TestWebSearchConfiguration:
         # Default should work (duckduckgo doesn't require API keys)
         is_valid, _ = SearchAPIConfig.validate_config(settings)
         assert is_valid
+
+    def test_web_search_invalid_config_returns_formatted_error(self):
+        """Invalid config should be returned through the shared formatter."""
+        settings = create_settings(SEARCH_API="totally_fake_api")
+        result = web_search("test query", settings=settings)
+        assert result.startswith("Error: ")
+        assert "Unsupported search API" in result

@@ -73,6 +73,12 @@ class TestProjectCommands:
         assert result.exit_code == 0
         # Should show projects or empty message
 
+    def test_project_info_missing_project_exits_cleanly(self, runner):
+        """Missing projects should surface a consistent CLI error."""
+        result = runner.invoke(app, ["project-info", "missing-project"])
+        assert result.exit_code == 1
+        assert "Error:" in result.stdout
+
 
 class TestSessionCommands:
     """Test session management commands."""
@@ -82,6 +88,15 @@ class TestSessionCommands:
         result = runner.invoke(app, ["session-list"])
         assert result.exit_code == 0
         # Should handle no current project gracefully
+
+    def test_session_show_missing_session_exits_cleanly(self, runner, temp_workspace):
+        """Missing sessions should surface a consistent CLI error."""
+        result = runner.invoke(
+            app,
+            ["--workdir", str(temp_workspace), "session-show", "missing-session", "--project", "missing-project"],
+        )
+        assert result.exit_code == 1
+        assert "Error:" in result.stdout
 
 
 class TestCLIOptions:

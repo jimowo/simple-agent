@@ -6,11 +6,37 @@ The web_search tool supports multiple search APIs configurable via environment v
 
 from typing import TYPE_CHECKING, Dict, Optional
 
+from simple_agent.exceptions import ConfigurationError, ToolExecutionError, ToolTimeoutError
 from simple_agent.utils.constants import MAX_WEB_CONTENT_LENGTH
 from simple_agent.utils.error_handling import handle_tool_errors
 
 if TYPE_CHECKING:
     from simple_agent.models.config import Settings
+
+
+def _require_requests():
+    """Import requests or raise a structured tool error."""
+    try:
+        import requests
+    except ImportError as exc:
+        raise ToolExecutionError(
+            "web_tools",
+            "requests library not installed. Install with: pip install requests",
+        ) from exc
+    return requests
+
+
+def _require_requests_and_bs4():
+    """Import requests and BeautifulSoup or raise a structured tool error."""
+    requests = _require_requests()
+    try:
+        from bs4 import BeautifulSoup
+    except ImportError as exc:
+        raise ToolExecutionError(
+            "web_search_html",
+            "Required libraries not installed. Install with: pip install requests beautifulsoup4",
+        ) from exc
+    return requests, BeautifulSoup
 
 
 class SearchAPIConfig:
@@ -141,10 +167,7 @@ def web_fetch(url: str, timeout: int = 20) -> str:
     Returns:
         The fetched content as text, or error message
     """
-    try:
-        import requests
-    except ImportError:
-        return "Error: requests library not installed. Install with: pip install requests"
+    requests = _require_requests()
 
     try:
         response = requests.get(url, timeout=timeout, allow_redirects=True)
@@ -171,12 +194,10 @@ def web_fetch(url: str, timeout: int = 20) -> str:
 
         return content
 
-    except requests.Timeout:
-        return f"Error: Request timed out after {timeout} seconds"
+    except requests.Timeout as exc:
+        raise ToolTimeoutError("web_fetch", timeout) from exc
     except requests.RequestException as e:
-        return f"Error: Failed to fetch URL: {e}"
-    except Exception as e:
-        return f"Error: {e}"
+        raise ToolExecutionError("web_fetch", f"Failed to fetch URL: {e}") from e
 
 
 @handle_tool_errors
@@ -201,10 +222,7 @@ def web_search(
     Returns:
         Search results as formatted text
     """
-    try:
-        import requests
-    except ImportError:
-        return "Error: requests library not installed. Install with: pip install requests"
+    _require_requests()
 
     # Load settings if not provided
     if settings is None:
@@ -217,7 +235,7 @@ def web_search(
     # Validate configuration
     is_valid, error_msg = SearchAPIConfig.validate_config(settings)
     if not is_valid:
-        return f"Error: {error_msg}"
+        raise ConfigurationError(error_msg)
 
     # Route to appropriate search implementation
     if api_name == "duckduckgo":
@@ -229,15 +247,12 @@ def web_search(
     elif api_name == "serpapi":
         return _search_serpapi(query, num_results, timeout, settings)
     else:
-        return f"Error: Unsupported search API '{api_name}'"
+        raise ConfigurationError(f"Unsupported search API '{api_name}'")
 
 
 def _search_duckduckgo(query: str, num_results: int, timeout: int) -> str:
     """Search using DuckDuckGo Instant Answer API (free, no API key)."""
-    try:
-        import requests
-    except ImportError:
-        return "Error: requests library not installed. Install with: pip install requests"
+    requests = _require_requests()
 
     try:
         url = "https://api.duckduckgo.com/"
@@ -276,20 +291,15 @@ def _search_duckduckgo(query: str, num_results: int, timeout: int) -> str:
 
         return "\n".join(results)
 
-    except requests.Timeout:
-        return f"Error: Search timed out after {timeout} seconds"
+    except requests.Timeout as exc:
+        raise ToolTimeoutError("web_search", timeout) from exc
     except requests.RequestException as e:
-        return f"Error: Search failed: {e}"
-    except Exception as e:
-        return f"Error: {e}"
+        raise ToolExecutionError("web_search", f"Search failed: {e}") from e
 
 
 def _search_google(query: str, num_results: int, timeout: int, settings: "Settings") -> str:
     """Search using Google Custom Search API."""
-    try:
-        import requests
-    except ImportError:
-        return "Error: requests library not installed. Install with: pip install requests"
+    requests = _require_requests()
 
     try:
         api_key = settings.google_search_api_key
@@ -323,20 +333,15 @@ def _search_google(query: str, num_results: int, timeout: int, settings: "Settin
 
         return "\n".join(results)
 
-    except requests.Timeout:
-        return f"Error: Search timed out after {timeout} seconds"
+    except requests.Timeout as exc:
+        raise ToolTimeoutError("web_search", timeout) from exc
     except requests.RequestException as e:
-        return f"Error: Search failed: {e}"
-    except Exception as e:
-        return f"Error: {e}"
+        raise ToolExecutionError("web_search", f"Search failed: {e}") from e
 
 
 def _search_bing(query: str, num_results: int, timeout: int, settings: "Settings") -> str:
     """Search using Bing Search API."""
-    try:
-        import requests
-    except ImportError:
-        return "Error: requests library not installed. Install with: pip install requests"
+    requests = _require_requests()
 
     try:
         api_key = settings.bing_search_api_key
@@ -368,20 +373,15 @@ def _search_bing(query: str, num_results: int, timeout: int, settings: "Settings
 
         return "\n".join(results)
 
-    except requests.Timeout:
-        return f"Error: Search timed out after {timeout} seconds"
+    except requests.Timeout as exc:
+        raise ToolTimeoutError("web_search", timeout) from exc
     except requests.RequestException as e:
-        return f"Error: Search failed: {e}"
-    except Exception as e:
-        return f"Error: {e}"
+        raise ToolExecutionError("web_search", f"Search failed: {e}") from e
 
 
 def _search_serpapi(query: str, num_results: int, timeout: int, settings: "Settings") -> str:
     """Search using SerpAPI (supports Google, Bing, etc.)."""
-    try:
-        import requests
-    except ImportError:
-        return "Error: requests library not installed. Install with: pip install requests"
+    requests = _require_requests()
 
     try:
         api_key = settings.serpapi_api_key
@@ -414,12 +414,10 @@ def _search_serpapi(query: str, num_results: int, timeout: int, settings: "Setti
 
         return "\n".join(results)
 
-    except requests.Timeout:
-        return f"Error: Search timed out after {timeout} seconds"
+    except requests.Timeout as exc:
+        raise ToolTimeoutError("web_search", timeout) from exc
     except requests.RequestException as e:
-        return f"Error: Search failed: {e}"
-    except Exception as e:
-        return f"Error: {e}"
+        raise ToolExecutionError("web_search", f"Search failed: {e}") from e
 
 
 @handle_tool_errors
@@ -441,11 +439,7 @@ def web_search_html(
     Returns:
         Search results as formatted text
     """
-    try:
-        import requests
-        from bs4 import BeautifulSoup
-    except ImportError:
-        return "Error: Required libraries not installed. Install with: pip install requests beautifulsoup4"
+    requests, BeautifulSoup = _require_requests_and_bs4()
 
     try:
         # Use DuckDuckGo HTML search
@@ -489,12 +483,10 @@ def web_search_html(
 
         return "\n".join(results)
 
-    except requests.Timeout:
-        return f"Error: Search timed out after {timeout} seconds"
+    except requests.Timeout as exc:
+        raise ToolTimeoutError("web_search_html", timeout) from exc
     except requests.RequestException as e:
-        return f"Error: Search failed: {e}"
-    except Exception as e:
-        return f"Error: {e}"
+        raise ToolExecutionError("web_search_html", f"Search failed: {e}") from e
 
 
 __all__ = [
