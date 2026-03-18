@@ -1,9 +1,10 @@
 """Permission manager for dangerous operations."""
 
-from typing import Callable, Dict, List, Optional, Protocol
+from typing import Any, Callable, Dict, List, Optional, Protocol
 
 from loguru import logger
 
+from simple_agent.exceptions import InvalidPolicyError
 from simple_agent.permissions.models import (
     PermissionPolicy,
     PermissionRequest,
@@ -274,6 +275,8 @@ class PermissionManager:
         ]
 
     def set_session_policy(self, tool: str, policy: PermissionPolicy) -> None:
+        if not isinstance(policy, PermissionPolicy):
+            raise InvalidPolicyError(str(policy), "policy must be a PermissionPolicy value")
         self.session_policies[tool] = policy
 
     def get_session_policy(self, tool: str) -> Optional[PermissionPolicy]:
@@ -287,7 +290,7 @@ class PermissionManager:
     def check_permission(
         self,
         tool: str,
-        params: Dict[str, any],
+        params: Dict[str, Any],
         risk_level_override: Optional[str] = None,
     ) -> PermissionResponse:
         risk_level = risk_level_override or self.RISK_LEVELS.get(tool, "low")

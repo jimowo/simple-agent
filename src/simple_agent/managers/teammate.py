@@ -6,12 +6,14 @@ import time
 from typing import Any, Callable, Dict, List, Optional
 
 from simple_agent.core.service_registration import create_provider_from_settings
+from simple_agent.exceptions import TeammateError, ToolNotFoundError
 from simple_agent.managers.message import MessageBus
 from simple_agent.managers.task import TaskManager
 from simple_agent.models.config import Settings
 from simple_agent.tools.bash_tools import run_bash
 from simple_agent.tools.file_tools import edit_file, read_file, write_file
 from simple_agent.tools.search_tools import glob_files, grep_content
+from simple_agent.utils.error_handling import format_tool_error
 
 # Global shutdown and plan tracking
 shutdown_requests = {}
@@ -53,12 +55,18 @@ class TeammateManager:
             Team configuration dict
         """
         if self.config_path.exists():
-            return json.loads(self.config_path.read_text())
+            try:
+                return json.loads(self.config_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise TeammateError(f"failed to load team config: {exc}") from exc
         return {"team_name": "default", "members": []}
 
     def _save(self):
         """Save team configuration."""
-        self.config_path.write_text(json.dumps(self.config, indent=2))
+        try:
+            self.config_path.write_text(json.dumps(self.config, indent=2), encoding="utf-8")
+        except OSError as exc:
+            raise TeammateError(f"failed to save team config: {exc}") from exc
 
     def _find(self, name: str) -> dict:
         """Find member by name.
@@ -96,7 +104,7 @@ class TeammateManager:
         member = self._find(name)
         if member:
             if member["status"] not in ("idle", "shutdown"):
-                return f"Error: '{name}' is currently {member['status']}"
+                raise TeammateError(f"'{name}' is currently {member['status']}", teammate=name)
             member["status"] = "working"
             member["role"] = role
         else:
@@ -156,7 +164,10 @@ class TeammateManager:
                 "write_file": lambda **kw: write_file(kw["path"], kw["content"]),
                 "edit_file": lambda **kw: edit_file(kw["path"], kw["old_text"], kw["new_text"]),
             }
-            return dispatch.get(tool_call.name, lambda **kw: "Unknown")(**tool_call.input)
+            handler = dispatch.get(tool_call.name)
+            if handler is None:
+                raise ToolNotFoundError(tool_call.name)
+            return handler(**tool_call.input)
 
     def _process_inbox_messages(
         self, name: str, inbox: List[Dict], messages: List[Dict]
@@ -224,7 +235,10 @@ class TeammateManager:
             for tc in response.tool_calls:
                 if tc.name == "idle":
                     idle_requested = True
-                output = self._execute_tool_call(name, tc)
+                try:
+                    output = self._execute_tool_call(name, tc)
+                except Exception as exc:
+                    output = format_tool_error(tc.name, exc)
                 print(f"  [{name}] {tc.name}: {str(output)[:120]}")
                 results.append({"type": "tool_result", "tool_use_id": tc.id, "content": str(output)})
 
@@ -245,7 +259,7 @@ class TeammateManager:
         """
         unclaimed = []
         for f in sorted(self.settings.tasks_dir.glob("task_*.json")):
-            t = json.loads(f.read_text())
+            t = json.loads(f.read_text(encoding="utf-8"))
             if t.get("status") == "pending" and not t.get("owner") and not t.get("blockedBy"):
                 unclaimed.append(t)
 

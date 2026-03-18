@@ -4,8 +4,9 @@ This module provides the encoder factory for creating memory encoders
 that convert text to vector embeddings for semantic search.
 """
 
-from typing import Dict, Optional, type
+from typing import Dict, Optional
 
+from simple_agent.exceptions import ConfigurationError
 from simple_agent.models.config import Settings
 
 
@@ -62,7 +63,7 @@ class MemoryEncoderFactory:
             return encoder_class(settings)
 
         # Unknown encoder
-        raise ValueError(f"Unknown memory encoder: {encoder_name}")
+        raise ConfigurationError(f"Unknown memory encoder: {encoder_name}")
 
 
 # Type alias for the encoder interface

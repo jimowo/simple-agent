@@ -10,6 +10,13 @@ import uuid
 from pathlib import Path
 from typing import Generator, List, Optional
 
+from pydantic import ValidationError
+
+from simple_agent.exceptions import (
+    ProjectValidationError,
+    SessionNotFoundError,
+    SessionValidationError,
+)
 from simple_agent.managers.base import BaseManager
 from simple_agent.models.config import Settings
 from simple_agent.models.projects import (
@@ -120,8 +127,15 @@ class SessionManager(BaseManager):
         try:
             data = json.loads(session_file.read_text(encoding="utf-8"))
             return SessionMetadata(**data)
-        except (json.JSONDecodeError, ValueError):
+        except (OSError, json.JSONDecodeError, ValidationError, ValueError):
             return None
+
+    def get_session_or_raise(self, project_id: str, session_id: str) -> SessionMetadata:
+        """Get session metadata by ID or raise a standardized exception."""
+        session = self.get_session(project_id, session_id)
+        if session is None:
+            raise SessionNotFoundError(session_id, project_id=project_id)
+        return session
 
     def append_message(
         self,
@@ -143,16 +157,15 @@ class SessionManager(BaseManager):
             f.write(message.model_dump_json(exclude_none=True) + "\n")
 
         # Update session metadata
-        session = self.get_session(project_id, session_id)
-        if session:
-            session.message_count += 1
-            session.last_updated = session.last_updated.now()
-            project_dir = get_project_dir(self.projects_root, project_id)
-            self._save_session_metadata(project_dir, session)
+        session = self.get_session_or_raise(project_id, session_id)
+        session.message_count += 1
+        session.last_updated = session.last_updated.now()
+        project_dir = get_project_dir(self.projects_root, project_id)
+        self._save_session_metadata(project_dir, session)
 
-            # Update current session if it's the same
-            if self._current_session and self._current_session.session_id == session_id:
-                self._current_session = session
+        # Update current session if it's the same
+        if self._current_session and self._current_session.session_id == session_id:
+            self._current_session = session
 
     def read_messages(
         self,
@@ -296,7 +309,7 @@ class SessionManager(BaseManager):
         self,
         project_id: str,
         session_id: str,
-    ) -> Optional[SessionMetadata]:
+    ) -> SessionMetadata:
         """Archive a session.
 
         Args:
@@ -304,11 +317,9 @@ class SessionManager(BaseManager):
             session_id: Session ID to archive
 
         Returns:
-            Updated SessionMetadata or None if session not found
+            Updated SessionMetadata
         """
-        session = self.get_session(project_id, session_id)
-        if not session:
-            return None
+        session = self.get_session_or_raise(project_id, session_id)
 
         session.status = "archived"
         project_dir = get_project_dir(self.projects_root, project_id)
@@ -346,10 +357,16 @@ class SessionManager(BaseManager):
         session_file = get_session_metadata_file(
             self.projects_root, session.project_id, session.session_id
         )
-        session_file.write_text(
-            session.model_dump_json(exclude_none=True, indent=2),
-            encoding="utf-8",
-        )
+        try:
+            session_file.write_text(
+                session.model_dump_json(exclude_none=True, indent=2),
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            raise SessionValidationError(
+                f"Failed to save session metadata: {exc}",
+                session_id=session.session_id,
+            ) from exc
 
     def _increment_project_session_count(self, project_dir: Path) -> None:
         """Increment the session count for a project.
@@ -366,6 +383,10 @@ class SessionManager(BaseManager):
                     json.dumps(data, indent=2, ensure_ascii=False),
                     encoding="utf-8",
                 )
+            except OSError as exc:
+                raise ProjectValidationError(
+                    f"Failed to update project session count: {exc}"
+                ) from exc
             except (json.JSONDecodeError, ValueError):
                 # Skip if metadata is corrupted
                 pass
@@ -385,11 +406,23 @@ class SessionManager(BaseManager):
     def _ensure_session_messages_file(self, project_id: str, session_id: str) -> Path:
         """Ensure the canonical messages file exists, migrating legacy data if needed."""
         canonical = get_session_messages_file(self.projects_root, project_id, session_id)
-        canonical.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            canonical.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            raise SessionValidationError(
+                f"Failed to create session messages directory: {exc}",
+                session_id=session_id,
+            ) from exc
 
         legacy = get_legacy_session_messages_file(self.projects_root, project_id, session_id)
         if legacy.exists() and not canonical.exists():
-            canonical.write_text(legacy.read_text(encoding="utf-8"), encoding="utf-8")
-            legacy.unlink()
+            try:
+                canonical.write_text(legacy.read_text(encoding="utf-8"), encoding="utf-8")
+                legacy.unlink()
+            except OSError as exc:
+                raise SessionValidationError(
+                    f"Failed to migrate legacy session messages: {exc}",
+                    session_id=session_id,
+                ) from exc
 
         return canonical

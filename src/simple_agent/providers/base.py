@@ -5,6 +5,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+from simple_agent.exceptions import InvalidProviderError, ProviderResponseError
+
 
 @dataclass
 class Message:
@@ -122,7 +124,10 @@ class BaseProvider(ABC):
         Convert provider response to standard ProviderResponse.
         Must be implemented by each provider.
         """
-        raise NotImplementedError("Subclasses must implement convert_response_to_standard")
+        raise ProviderResponseError(
+            self.__class__.__name__,
+            "Subclasses must implement convert_response_to_standard",
+        )
 
     def split_system_messages(
         self,
@@ -283,15 +288,12 @@ class ProviderFactory:
             Provider instance
 
         Raises:
-            ValueError: If provider is not registered
+            InvalidProviderError: If provider is not registered
         """
         cls._ensure_registered()
         provider_class = cls._providers.get(provider_name)
         if provider_class is None:
-            raise ValueError(
-                f"Unknown provider: {provider_name}. "
-                f"Available: {list(cls._providers.keys())}"
-            )
+            raise InvalidProviderError(provider_name, list(cls._providers.keys()))
         return provider_class(api_key=api_key, base_url=base_url, model=model, **kwargs)
 
     @classmethod

@@ -7,6 +7,15 @@ in tool functions.
 from functools import wraps
 from typing import Any, Callable
 
+from simple_agent.exceptions import SimpleAgentError, ToolExecutionError
+
+
+def format_tool_error(func_name: str, error: Exception) -> str:
+    """Format tool exceptions consistently for tool-facing APIs."""
+    if isinstance(error, SimpleAgentError):
+        return f"Error: {error}"
+    return f"Error: {ToolExecutionError(func_name, str(error))}"
+
 
 def handle_tool_errors(func: Callable) -> Callable:
     """Decorator to handle exceptions in tool functions consistently.
@@ -31,7 +40,7 @@ def handle_tool_errors(func: Callable) -> Callable:
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            return f"Error: {e}"
+            return format_tool_error(func.__name__, e)
 
     return wrapper
 
@@ -70,8 +79,8 @@ def handle_unicode_fallback(func: Callable) -> Callable:
 
                 return safe_path(path).read_text()
             except Exception as e:
-                return f"Error: {e}"
+                return format_tool_error(func.__name__, e)
         except Exception as e:
-            return f"Error: {e}"
+            return format_tool_error(func.__name__, e)
 
     return wrapper

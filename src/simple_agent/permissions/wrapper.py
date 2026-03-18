@@ -8,16 +8,8 @@ from typing import Callable
 
 from loguru import logger
 
+from simple_agent.exceptions import PermissionDeniedError
 from simple_agent.permissions.manager import PermissionManager
-
-
-class PermissionDeniedError(Exception):
-    """Raised when permission is denied for a tool call."""
-
-    def __init__(self, tool: str, reason: str = ""):
-        self.tool = tool
-        self.reason = reason
-        super().__init__(f"Permission denied for tool '{tool}'{': ' + reason if reason else ''}")
 
 
 def wrap_with_permission(
@@ -61,10 +53,13 @@ def wrap_with_permission(
         logger.debug(f"[PERMISSION_WRAPPER] Permission check result: allowed={response.allowed}, policy={response.policy}")
 
         if not response.allowed:
-            logger.warning(f"[PERMISSION_WRAPPER] Permission DENIED for tool='{tool_name}', reason='{response.reason}'")
+            denial_reason = "Permission denied by user or policy"
+            logger.warning(
+                f"[PERMISSION_WRAPPER] Permission DENIED for tool='{tool_name}', reason='{denial_reason}'"
+            )
             raise PermissionDeniedError(
                 tool_name,
-                reason="Permission denied by user or policy",
+                denial_reason,
             )
 
         # Execute original handler

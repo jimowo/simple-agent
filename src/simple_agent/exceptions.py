@@ -497,6 +497,64 @@ class ProjectValidationError(ProjectError):
 
 
 # ============================================================================
+# Skill Errors
+# ============================================================================
+
+class SkillError(SimpleAgentError):
+    """Base exception for skill-related errors."""
+
+    pass
+
+
+class SkillNotFoundError(SkillError):
+    """Raised when a requested skill is not found."""
+
+    def __init__(self, skill_name: str, available: Optional[list] = None):
+        details = {"skill_name": skill_name}
+        if available:
+            details["available"] = ", ".join(available)
+        super().__init__(f"Skill '{skill_name}' not found", details=details)
+
+
+# ============================================================================
+# Messaging Errors
+# ============================================================================
+
+class MessageBusError(SimpleAgentError):
+    """Raised when message bus operations fail."""
+
+    def __init__(self, reason: str, recipient: Optional[str] = None):
+        details = {"reason": reason}
+        if recipient:
+            details["recipient"] = recipient
+        super().__init__(f"Message bus error: {reason}", details=details)
+
+
+# ============================================================================
+# Background / Teammate Errors
+# ============================================================================
+
+class BackgroundTaskError(SimpleAgentError):
+    """Raised when background task operations fail."""
+
+    def __init__(self, reason: str, task_id: Optional[str] = None):
+        details = {"reason": reason}
+        if task_id:
+            details["task_id"] = task_id
+        super().__init__(f"Background task error: {reason}", details=details)
+
+
+class TeammateError(SimpleAgentError):
+    """Raised when teammate manager operations fail."""
+
+    def __init__(self, reason: str, teammate: Optional[str] = None):
+        details = {"reason": reason}
+        if teammate:
+            details["teammate"] = teammate
+        super().__init__(f"Teammate error: {reason}", details=details)
+
+
+# ============================================================================
 # Session Errors
 # ============================================================================
 
@@ -596,6 +654,17 @@ __all__ = [
     "ProjectError",
     "ProjectNotFoundError",
     "ProjectValidationError",
+
+    # Skills
+    "SkillError",
+    "SkillNotFoundError",
+
+    # Messaging
+    "MessageBusError",
+
+    # Background / teammates
+    "BackgroundTaskError",
+    "TeammateError",
 
     # Sessions
     "SessionError",

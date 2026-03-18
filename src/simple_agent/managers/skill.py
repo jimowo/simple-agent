@@ -3,6 +3,7 @@
 import re
 from pathlib import Path
 
+from simple_agent.exceptions import SkillNotFoundError
 from simple_agent.managers.base import BaseManager
 
 
@@ -79,5 +80,5 @@ class SkillLoader(BaseManager):
         """Load a skill by name."""
         s = self.skills.get(name)
         if not s:
-            return f"Error: Unknown skill '{name}'. Available: {', '.join(self.skills.keys())}"
+            raise SkillNotFoundError(name, sorted(self.skills.keys()))
         return f'<skill name="{name}">\n{s["body"]}\n</skill>'

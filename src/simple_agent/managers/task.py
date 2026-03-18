@@ -2,6 +2,7 @@
 
 import json
 
+from simple_agent.exceptions import TaskNotFoundError, TaskValidationError
 from simple_agent.managers.base import BaseManager
 
 
@@ -26,12 +27,21 @@ class TaskManager(BaseManager):
         """Load task by ID."""
         p = self.tasks_dir / f"task_{tid}.json"
         if not p.exists():
-            raise ValueError(f"Task {tid} not found")
-        return json.loads(p.read_text())
+            raise TaskNotFoundError(tid)
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise TaskValidationError(f"Failed to load task {tid}: {exc}") from exc
 
     def _save(self, task: dict):
         """Save task to file."""
-        (self.tasks_dir / f"task_{task['id']}.json").write_text(json.dumps(task, indent=2))
+        try:
+            (self.tasks_dir / f"task_{task['id']}.json").write_text(
+                json.dumps(task, indent=2),
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            raise TaskValidationError(f"Failed to save task {task['id']}: {exc}") from exc
 
     def create(self, subject: str, description: str = "") -> str:
         """Create a new task."""
@@ -60,12 +70,15 @@ class TaskManager(BaseManager):
             task["status"] = status
             if status == "completed":
                 for f in self.tasks_dir.glob("task_*.json"):
-                    t = json.loads(f.read_text())
+                    t = json.loads(f.read_text(encoding="utf-8"))
                     if tid in t.get("blockedBy", []):
                         t["blockedBy"].remove(tid)
                         self._save(t)
             if status == "deleted":
-                (self.tasks_dir / f"task_{tid}.json").unlink(missing_ok=True)
+                try:
+                    (self.tasks_dir / f"task_{tid}.json").unlink(missing_ok=True)
+                except OSError as exc:
+                    raise TaskValidationError(f"Failed to delete task {tid}: {exc}") from exc
                 return f"Task {tid} deleted"
         if add_blocked_by:
             task["blockedBy"] = list(set(task["blockedBy"] + add_blocked_by))

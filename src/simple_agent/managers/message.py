@@ -3,6 +3,7 @@
 import json
 import time
 
+from simple_agent.exceptions import MessageBusError
 from simple_agent.models.config import Settings
 
 
@@ -26,6 +27,9 @@ class MessageBus:
         self, sender: str, to: str, content: str, msg_type: str = "message", extra: dict = None
     ) -> str:
         """Send a message to a specific agent."""
+        if msg_type not in self.VALID_MSG_TYPES:
+            raise MessageBusError(f"invalid message type '{msg_type}'", recipient=to)
+
         msg = {
             "type": msg_type,
             "from": sender,
@@ -34,8 +38,11 @@ class MessageBus:
         }
         if extra:
             msg.update(extra)
-        with open(self.inbox_dir / f"{to}.jsonl", "a") as f:
-            f.write(json.dumps(msg) + "\n")
+        try:
+            with open(self.inbox_dir / f"{to}.jsonl", "a", encoding="utf-8") as f:
+                f.write(json.dumps(msg) + "\n")
+        except OSError as exc:
+            raise MessageBusError(str(exc), recipient=to) from exc
         return f"Sent {msg_type} to {to}"
 
     def read_inbox(self, name: str) -> list:
@@ -43,8 +50,11 @@ class MessageBus:
         path = self.inbox_dir / f"{name}.jsonl"
         if not path.exists():
             return []
-        msgs = [json.loads(line) for line in path.read_text().strip().splitlines() if line]
-        path.write_text("")
+        try:
+            msgs = [json.loads(line) for line in path.read_text(encoding="utf-8").strip().splitlines() if line]
+            path.write_text("", encoding="utf-8")
+        except OSError as exc:
+            raise MessageBusError(str(exc), recipient=name) from exc
         return msgs
 
     def broadcast(self, sender: str, content: str, names: list) -> str:

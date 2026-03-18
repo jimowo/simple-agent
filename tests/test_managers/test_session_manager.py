@@ -1,5 +1,8 @@
 """Tests for session storage layout and migration behavior."""
 
+import pytest
+
+from simple_agent.exceptions import SessionNotFoundError
 from simple_agent.managers.project import ProjectManager
 from simple_agent.managers.session import SessionManager
 from simple_agent.models.projects import SessionMessage
@@ -65,3 +68,10 @@ class TestSessionManagerStorage:
         assert '"content":"old"' in content
         assert '"content":"new"' in content
         assert not legacy_file.exists()
+
+    def test_get_session_or_raise_raises_not_found(self, mock_settings):
+        """Missing sessions should raise SessionNotFoundError."""
+        session_mgr = SessionManager(mock_settings)
+
+        with pytest.raises(SessionNotFoundError):
+            session_mgr.get_session_or_raise("missing-project", "missing-session")

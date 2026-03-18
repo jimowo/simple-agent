@@ -7,7 +7,7 @@ with the container, following the Dependency Inversion Principle (DIP).
 from typing import Any, Dict
 
 from simple_agent.core.container import ServiceContainer
-from simple_agent.exceptions import MissingApiKeyError
+from simple_agent.exceptions import ConfigurationError, MissingApiKeyError
 from simple_agent.models.config import Settings
 from simple_agent.providers.base import BaseProvider
 
@@ -182,7 +182,7 @@ def _create_memory_encoder(settings: Settings):
 
     try:
         return MemoryEncoderFactory.create(settings)
-    except Exception as e:
+    except ConfigurationError as e:
         from loguru import logger
         logger.warning(f"Failed to create memory encoder: {e}")
         return None
@@ -205,7 +205,7 @@ def _create_memory_manager(settings: Settings, encoder):
 
     try:
         return MemoryFactory.create(settings, encoder)
-    except Exception as e:
+    except ConfigurationError as e:
         from loguru import logger
         logger.warning(f"Failed to create memory manager: {e}")
         return None

@@ -8,6 +8,9 @@ import json
 from pathlib import Path
 from typing import List, Optional
 
+from pydantic import ValidationError
+
+from simple_agent.exceptions import ProjectNotFoundError, ProjectValidationError
 from simple_agent.managers.base import BaseManager
 from simple_agent.models.config import Settings
 from simple_agent.models.projects import ProjectMetadata
@@ -66,7 +69,7 @@ class ProjectManager(BaseManager):
                 project = ProjectMetadata(**data)
                 # Update last accessed time
                 project.last_accessed = project.last_accessed.now()
-            except (json.JSONDecodeError, ValueError):
+            except (OSError, json.JSONDecodeError, ValidationError, ValueError):
                 # If metadata is corrupted, create new project
                 project = ProjectMetadata(
                     project_id=project_id,
@@ -102,8 +105,15 @@ class ProjectManager(BaseManager):
         try:
             data = json.loads(metadata_file.read_text(encoding="utf-8"))
             return ProjectMetadata(**data)
-        except (json.JSONDecodeError, ValueError):
+        except (OSError, json.JSONDecodeError, ValidationError, ValueError):
             return None
+
+    def get_project_or_raise(self, project_id: str) -> ProjectMetadata:
+        """Get a project by ID or raise a standardized project exception."""
+        project = self.get_project(project_id)
+        if project is None:
+            raise ProjectNotFoundError(project_id)
+        return project
 
     def list_projects(self, limit: Optional[int] = None) -> List[ProjectMetadata]:
         """List all projects.
@@ -154,7 +164,7 @@ class ProjectManager(BaseManager):
         self,
         project_id: str,
         **kwargs
-    ) -> Optional[ProjectMetadata]:
+    ) -> ProjectMetadata:
         """Update project metadata fields.
 
         Args:
@@ -162,16 +172,19 @@ class ProjectManager(BaseManager):
             **kwargs: Fields to update (e.g., session_count=5)
 
         Returns:
-            Updated ProjectMetadata or None if project not found
+            Updated ProjectMetadata
         """
-        project = self.get_project(project_id)
-        if not project:
-            return None
+        project = self.get_project_or_raise(project_id)
 
         # Update specified fields
         for key, value in kwargs.items():
             if hasattr(project, key):
                 setattr(project, key, value)
+            else:
+                raise ProjectValidationError(
+                    f"Unknown project metadata field: {key}",
+                    project_id=project_id,
+                )
 
         # Save updated metadata
         self._save_metadata(project)
@@ -191,7 +204,13 @@ class ProjectManager(BaseManager):
         project_dir = get_project_dir(self.projects_root, project.project_id)
         metadata_file = get_project_metadata_file(self.projects_root, project.project_id)
 
-        metadata_file.write_text(
-            project.model_dump_json(indent=2, exclude_none=True),
-            encoding="utf-8"
-        )
+        try:
+            metadata_file.write_text(
+                project.model_dump_json(indent=2, exclude_none=True),
+                encoding="utf-8"
+            )
+        except OSError as exc:
+            raise ProjectValidationError(
+                f"Failed to save project metadata: {exc}",
+                project_id=project.project_id,
+            ) from exc

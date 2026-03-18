@@ -11,6 +11,7 @@ from loguru import logger
 if TYPE_CHECKING:
     from simple_agent.managers.memory.interface import IMemory
 
+from simple_agent.exceptions import ConfigurationError
 from simple_agent.models.config import Settings
 
 
@@ -41,7 +42,7 @@ class MemoryFactory:
             memory_class: Memory class to register (must implement IMemory)
 
         Raises:
-            TypeError: If memory_class doesn't implement IMemory
+            ConfigurationError: If memory_class doesn't implement IMemory
 
         Example:
             MemoryFactory.register("custom", CustomMemory)
@@ -50,7 +51,7 @@ class MemoryFactory:
         from simple_agent.managers.memory.interface import IMemory
 
         if not issubclass(memory_class, IMemory):
-            raise TypeError(
+            raise ConfigurationError(
                 f"Memory class must implement IMemory interface. "
                 f"Got {type(memory_class)}"
             )
@@ -70,7 +71,7 @@ class MemoryFactory:
             Memory instance or None if memory is disabled
 
         Raises:
-            ValueError: If memory type is unknown
+            ConfigurationError: If memory type is unknown
         """
         if not settings.memory_enabled:
             logger.logger.info("[MemoryFactory] Memory is disabled")
@@ -93,7 +94,7 @@ class MemoryFactory:
 
         # Unknown memory type
         available = list(cls._memory_types.keys()) + ["chroma", "memory"]
-        raise ValueError(
+        raise ConfigurationError(
             f"Unknown memory type: {memory_type}. "
             f"Available types: {', '.join(available)}"
         )
@@ -127,11 +128,11 @@ class MemoryFactory:
             Dictionary with type information
 
         Raises:
-            ValueError: If memory type is unknown
+            ConfigurationError: If memory type is unknown
         """
         types = cls.list_types()
         if memory_type not in types:
-            raise ValueError(f"Unknown memory type: {memory_type}")
+            raise ConfigurationError(f"Unknown memory type: {memory_type}")
 
         return {
             "type": memory_type,

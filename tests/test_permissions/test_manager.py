@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from simple_agent.exceptions import InvalidPolicyError
 from simple_agent.permissions.manager import (
     NoOpStatusController,
     PermissionManager,
@@ -216,6 +217,13 @@ class TestPermissionManager:
         # Verify both pause and resume were called
         assert mock_controller.pause.call_count == 1
         assert mock_controller.resume.call_count == 1
+
+    def test_invalid_policy_rejected(self):
+        """Test invalid session policies raise a standardized exception."""
+        manager = PermissionManager(user_callback=lambda r: PermissionResponse(allowed=True))
+
+        with pytest.raises(InvalidPolicyError):
+            manager.set_session_policy("bash", "invalid")
 
 
 @pytest.mark.security
