@@ -1,10 +1,8 @@
 """Tool handlers and tool definitions for the agent.
 
-This module provides backward compatibility functions while recommending
-the use of ToolHandlerRegistry for new code.
-
-DEPRECATED: The global state pattern in this module is deprecated.
-New code should use ToolHandlerRegistry from handler_registry.py instead.
+This module keeps the old functional API for compatibility, but the
+registry is the single source of truth. New code should use
+ToolHandlerRegistry from handler_registry.py directly.
 """
 
 from typing import Callable, Dict, Optional
@@ -13,19 +11,54 @@ from simple_agent.models.config import Settings
 from simple_agent.tools.handler_registry import ToolHandlerRegistry
 from simple_agent.tools.tool_definitions import TOOLS
 
-# Placeholder for managers (will be set during initialization)
-# DEPRECATED: These global variables are maintained for backward compatibility only
-_todo_manager = None
-_task_manager = None
-_background_manager = None
-_message_bus = None
-_teammate_manager = None
-_skill_loader = None
-_provider = None
-_settings: Settings = None
+_settings: Optional[Settings] = None
 _permission_manager = None
-# ToolHandlerRegistry instance (created during initialization)
 _tool_handler_registry: Optional[ToolHandlerRegistry] = None
+
+
+def _build_legacy_registry(
+    todo_manager,
+    task_manager,
+    background_manager,
+    message_bus,
+    teammate_manager,
+    skill_loader,
+    provider,
+    settings,
+    permission_manager=None,
+) -> ToolHandlerRegistry:
+    """Build a compatibility registry from legacy manager arguments."""
+    from simple_agent.agent.context import AgentContext
+
+    context = AgentContext(
+        settings=settings,
+        todo=todo_manager,
+        task_mgr=task_manager,
+        bg=background_manager,
+        bus=message_bus,
+        skill_loader=skill_loader,
+        teammate=teammate_manager,
+        project_mgr=None,  # Not needed for legacy handlers
+        session_mgr=None,  # Not needed for legacy handlers
+        memory_mgr=None,
+        provider=provider,
+    )
+    return ToolHandlerRegistry(context, permission_manager)
+
+
+def set_registry(
+    registry: ToolHandlerRegistry,
+    settings: Optional[Settings] = None,
+    permission_manager=None,
+) -> ToolHandlerRegistry:
+    """Set the active compatibility registry used by legacy handler functions."""
+    global _tool_handler_registry, _settings, _permission_manager
+
+    _tool_handler_registry = registry
+    if settings is not None:
+        _settings = settings
+    _permission_manager = permission_manager
+    return registry
 
 
 def initialize_handlers(
@@ -47,39 +80,18 @@ def initialize_handlers(
     This function creates a ToolHandlerRegistry instance and initializes
     the legacy global variables for backward compatibility.
     """
-    global _todo_manager, _task_manager, _background_manager
-    global _message_bus, _teammate_manager, _skill_loader
-    global _provider, _settings, _permission_manager, _tool_handler_registry
-
-    _todo_manager = todo_manager
-    _task_manager = task_manager
-    _background_manager = background_manager
-    _message_bus = message_bus
-    _teammate_manager = teammate_manager
-    _skill_loader = skill_loader
-    _provider = provider
-    _settings = settings
-    _permission_manager = permission_manager
-
-    # Create ToolHandlerRegistry for use in this module
-    if _tool_handler_registry is None:
-        from simple_agent.agent.context import AgentContext
-
-        # Build a minimal context for the registry
-        context = AgentContext(
-            settings=settings,
-            todo=todo_manager,
-            task_mgr=task_manager,
-            bg=background_manager,
-            bus=message_bus,
-            skill_loader=skill_loader,
-            teammate=teammate_manager,
-            project_mgr=None,  # Not needed for legacy handlers
-            session_mgr=None,  # Not needed for legacy handlers
-            memory_mgr=None,
-            provider=provider,
-        )
-        _tool_handler_registry = ToolHandlerRegistry(context, permission_manager)
+    registry = _build_legacy_registry(
+        todo_manager,
+        task_manager,
+        background_manager,
+        message_bus,
+        teammate_manager,
+        skill_loader,
+        provider,
+        settings,
+        permission_manager=permission_manager,
+    )
+    return set_registry(registry, settings=settings, permission_manager=permission_manager)
 
 
 # Tool handler functions (delegates to ToolHandlerRegistry)
@@ -94,7 +106,7 @@ def _ensure_registry() -> ToolHandlerRegistry:
     """
     if _tool_handler_registry is None:
         raise RuntimeError(
-            "Tool handlers not initialized. Call initialize_handlers() first."
+            "Tool handlers not initialized. Call initialize_handlers() or set_registry() first."
         )
     return _tool_handler_registry
 
@@ -301,6 +313,7 @@ __all__ = [
     "TOOL_HANDLERS",
     "get_permission_aware_handlers",
     "initialize_handlers",
+    "set_registry",
     # New dependency-injection based approach
     "ToolHandlerRegistry",
 ]

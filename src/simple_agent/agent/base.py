@@ -231,8 +231,7 @@ class Agent:
         # Store permission manager for access
         self._permission_manager = permission_manager
 
-        # Initialize global state for backward compatibility
-        # TODO: Remove this in future version when all code uses DI
+        # Keep the old functional tool API pointed at the active registry.
         self._initialize_legacy_handlers(permission_manager)
 
     def _initialize_legacy_handlers(self, permission_manager) -> None:
@@ -241,17 +240,11 @@ class Agent:
         DEPRECATED: This method exists for backward compatibility only.
         New code should use ToolHandlerRegistry via dependency injection.
         """
-        from simple_agent.tools.tool_handlers import initialize_handlers
+        from simple_agent.tools.tool_handlers import set_registry
 
-        initialize_handlers(
-            self._ctx.todo,
-            self._ctx.task_mgr,
-            self._ctx.bg,
-            self._ctx.bus,
-            self._ctx.teammate,
-            self._ctx.skill_loader,
-            self._ctx.provider,
-            self._ctx.settings,
+        set_registry(
+            self._tool_registry,
+            settings=self._ctx.settings,
             permission_manager=permission_manager,
         )
 

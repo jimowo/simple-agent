@@ -33,11 +33,9 @@ def reset_global_state():
     from simple_agent.tools import tool_handlers
 
     for attr in [
-        '_todo_manager', '_task_manager', '_background_manager',
-        '_message_bus', '_teammate_manager', '_skill_loader',
-        '_project_manager', '_session_manager',
-        '_provider', '_settings', '_permission_manager',
-        '_tool_handler_registry',  # Added for new registry variable
+        '_settings',
+        '_permission_manager',
+        '_tool_handler_registry',
     ]:
         if hasattr(tool_handlers, attr):
             setattr(tool_handlers, attr, None)

@@ -66,8 +66,8 @@ class TestToolHandlers:
 class TestInitializeHandlers:
     """Test handler initialization."""
 
-    def test_initialize_handlers_sets_globals(self, temp_workspace):
-        """Test that initialize_handlers sets global managers."""
+    def test_initialize_handlers_sets_registry(self, temp_workspace):
+        """Test that initialize_handlers installs a compatibility registry."""
         from simple_agent.models.config import Settings
         from simple_agent.managers.todo import TodoManager
         from simple_agent.managers.task import TaskManager
@@ -100,15 +100,36 @@ class TestInitializeHandlers:
             permission_manager=None,
         )
 
-        # Verify globals were set (by checking handlers work)
-        assert tool_handlers._todo_manager is not None
-        assert tool_handlers._task_manager is not None
-        assert tool_handlers._background_manager is not None
-        assert tool_handlers._message_bus is not None
-        assert tool_handlers._teammate_manager is not None
-        assert tool_handlers._skill_loader is not None
-        assert tool_handlers._provider is not None
+        assert tool_handlers._tool_handler_registry is not None
         assert tool_handlers._settings is not None
+
+    def test_initialize_handlers_replaces_existing_registry(self, initialized_context):
+        """Test that repeated initialization does not reuse stale registry state."""
+        from simple_agent.models.config import Settings
+        from simple_agent.managers.todo import TodoManager
+        from simple_agent.managers.task import TaskManager
+        from simple_agent.managers.background import BackgroundManager
+        from simple_agent.managers.message import MessageBus
+        from simple_agent.managers.teammate import TeammateManager
+        from simple_agent.managers.skill import SkillLoader
+
+        first_registry = tool_handlers._tool_handler_registry
+        settings = initialized_context.settings
+        todo = TodoManager()
+        task = TaskManager(settings)
+        bg = BackgroundManager(settings)
+        bus = MessageBus(settings)
+        skill = SkillLoader(settings=settings)
+        teammate = TeammateManager(bus, task, settings)
+        provider = Mock()
+
+        initialize_handlers(
+            todo, task, bg, bus, teammate, skill,
+            provider, settings,
+            permission_manager=None,
+        )
+
+        assert tool_handlers._tool_handler_registry is not first_registry
 
 
 @pytest.mark.security
@@ -202,3 +223,20 @@ class TestGetPermissionAwareHandlers:
         # write_file should be wrapped
         assert "write_file" in handlers
         assert callable(handlers["write_file"])
+
+
+@pytest.mark.security
+class TestSetRegistry:
+    """Test direct registry installation for the legacy functional API."""
+
+    def test_set_registry_uses_active_registry(self, initialized_context):
+        """Test that set_registry points legacy handlers at the provided registry."""
+        from simple_agent.tools.handler_registry import ToolHandlerRegistry
+        from simple_agent.tools.tool_handlers import set_registry
+
+        registry = ToolHandlerRegistry(initialized_context)
+        set_registry(registry, settings=initialized_context.settings)
+
+        assert tool_handlers._tool_handler_registry is registry
+        result = tool_handlers.handle_bash("echo hello")
+        assert "hello" in result.lower()
