@@ -119,7 +119,7 @@ class TestRunBash:
         """Test subprocess exception handling."""
         mock_run.side_effect = Exception("Subprocess error")
 
-        result = run_bash("echo test", Path.cwd(), timeout=5)
+        result = run_bash("python -c \"print('test')\"", Path.cwd(), timeout=5)
         assert "error" in result.lower()
 
     def test_empty_command(self):
@@ -152,7 +152,7 @@ class TestRunBash:
         import subprocess
         mock_run.side_effect = subprocess.TimeoutExpired("echo", 1)
 
-        result = run_bash("echo test", Path.cwd(), timeout=1)
+        result = run_bash("python -c \"print('test')\"", Path.cwd(), timeout=1)
         assert "timeout" in result.lower()
 
 

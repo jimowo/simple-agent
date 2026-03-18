@@ -236,7 +236,7 @@ Tools are registered and dispatched through a centralized handler:
 from simple_agent.tools import TOOL_HANDLERS
 
 # Execute a tool
-result = TOOL_HANDLERS["bash"](command="ls -la")
+result = TOOL_HANDLERS["bash"](command="echo hello")
 ```
 
 ### Agent Core

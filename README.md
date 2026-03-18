@@ -236,7 +236,7 @@ todo = TodoItem(content="任务", status="pending", activeForm="工作中")
 from simple_agent.tools import TOOL_HANDLERS
 
 # 执行工具
-result = TOOL_HANDLERS["bash"](command="ls -la")
+result = TOOL_HANDLERS["bash"](command="echo hello")
 ```
 
 ### Agent 核心
