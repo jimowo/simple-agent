@@ -29,21 +29,6 @@ def reset_global_state():
     from loguru import logger as global_logger
     global_logger.remove()
 
-    # Reset tool handlers globals
-    from simple_agent.tools import tool_handlers
-
-    for attr in [
-        '_settings',
-        '_permission_manager',
-        '_tool_handler_registry',
-    ]:
-        if hasattr(tool_handlers, attr):
-            setattr(tool_handlers, attr, None)
-
-    # Clear tool registry (legacy)
-    if hasattr(tool_handlers, '_tool_registry'):
-        tool_handlers._tool_registry.clear()
-
     # Reset teammate manager globals
     from simple_agent.managers import teammate
     if hasattr(teammate, 'shutdown_requests'):
@@ -204,8 +189,6 @@ def initialized_context(mock_settings, mock_provider, mock_permission_manager):
     from simple_agent.managers.skill import SkillLoader
     from simple_agent.managers.project import ProjectManager
     from simple_agent.managers.session import SessionManager
-    from simple_agent.tools.tool_handlers import initialize_handlers
-
     # Create real manager instances with test settings
     todo = TodoManager()
     task = TaskManager(mock_settings)
@@ -229,13 +212,6 @@ def initialized_context(mock_settings, mock_provider, mock_permission_manager):
         session_mgr=session,
         memory_mgr=None,
         provider=mock_provider,
-    )
-
-    # Initialize tool handlers
-    initialize_handlers(
-        todo, task, bg, bus, teammate, skill,
-        mock_provider, mock_settings,
-        permission_manager=mock_permission_manager,
     )
 
     return context

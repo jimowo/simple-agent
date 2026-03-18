@@ -82,26 +82,10 @@ class Agent:
     following the Dependency Inversion Principle (DIP).
     """
 
-    _LEGACY_MANAGER_FIELDS = (
-        "todo_manager",
-        "task_manager",
-        "background_manager",
-        "message_bus",
-        "teammate_manager",
-        "skill_loader",
-    )
-
     def __init__(
         self,
         settings: Optional[Settings] = None,
         context: Optional[AgentContext] = None,
-        # Legacy parameters for backward compatibility
-        todo_manager=None,
-        task_manager=None,
-        background_manager=None,
-        message_bus=None,
-        teammate_manager=None,
-        skill_loader=None,
         permission_manager=None,
     ):
         """Initialize the Agent.
@@ -109,68 +93,24 @@ class Agent:
         Args:
             settings: Application settings (optional, uses default if None)
             context: Pre-built AgentContext (optional, creates from settings if None)
-            todo_manager: Legacy parameter for backward compatibility
-            task_manager: Legacy parameter for backward compatibility
-            background_manager: Legacy parameter for backward compatibility
-            message_bus: Legacy parameter for backward compatibility
-            teammate_manager: Legacy parameter for backward compatibility
-            skill_loader: Legacy parameter for backward compatibility
             permission_manager: Optional pre-configured permission manager
         """
         resolved_settings = settings or Settings()
-        self._ctx = self._resolve_context(
-            resolved_settings,
-            context=context,
-            todo_manager=todo_manager,
-            task_manager=task_manager,
-            background_manager=background_manager,
-            message_bus=message_bus,
-            teammate_manager=teammate_manager,
-            skill_loader=skill_loader,
-        )
+        self._ctx = self._resolve_context(resolved_settings, context=context)
         self._permission_manager = self._resolve_permission_manager(permission_manager)
         self._tool_registry = self._create_tool_registry(self._ctx, self._permission_manager)
-        self._initialize_legacy_handlers(self._permission_manager)
 
     def _resolve_context(
         self,
         settings: Settings,
         *,
         context: Optional[AgentContext],
-        todo_manager,
-        task_manager,
-        background_manager,
-        message_bus,
-        teammate_manager,
-        skill_loader,
     ) -> AgentContext:
-        """Resolve the active AgentContext from modern or legacy inputs."""
+        """Resolve the active AgentContext through the modern context factory."""
         if context is not None:
             return context
 
-        if self._has_legacy_manager_overrides(
-            todo_manager=todo_manager,
-            task_manager=task_manager,
-            background_manager=background_manager,
-            message_bus=message_bus,
-            teammate_manager=teammate_manager,
-            skill_loader=skill_loader,
-        ):
-            return self._create_legacy_context(
-                settings,
-                todo_manager,
-                task_manager,
-                background_manager,
-                message_bus,
-                teammate_manager,
-                skill_loader,
-            )
-
         return AgentContext.from_container(settings)
-
-    def _has_legacy_manager_overrides(self, **manager_overrides) -> bool:
-        """Check whether legacy-style manager injection is in use."""
-        return any(manager_overrides[field] is not None for field in self._LEGACY_MANAGER_FIELDS)
 
     def _resolve_permission_manager(self, permission_manager):
         """Resolve the permission manager used by this agent."""
@@ -182,87 +122,10 @@ class Agent:
         return PermissionManager()
 
     def _create_tool_registry(self, context: AgentContext, permission_manager):
-        """Create the tool registry used by the agent loop and compatibility layer."""
+        """Create the tool registry used by the agent loop."""
         from simple_agent.tools.handler_registry import ToolHandlerRegistry
 
         return ToolHandlerRegistry(context, permission_manager)
-
-    def _create_legacy_context(
-        self,
-        settings: Settings,
-        todo_manager,
-        task_manager,
-        background_manager,
-        message_bus,
-        teammate_manager,
-        skill_loader,
-    ) -> AgentContext:
-        """Create AgentContext from legacy manager arguments.
-
-        This maintains backward compatibility with code that directly
-        provides manager instances.
-
-        Args:
-            settings: Application settings
-            todo_manager: Todo manager instance
-            task_manager: Task manager instance
-            background_manager: Background manager instance
-            message_bus: Message bus instance
-            teammate_manager: Teammate manager instance
-            skill_loader: Skill loader instance
-
-        Returns:
-            AgentContext with provided managers
-        """
-        from simple_agent.core.service_registration import _create_provider
-        from simple_agent.managers.background import BackgroundManager as BackgroundManagerImpl
-        from simple_agent.managers.message import MessageBus as MessageBusImpl
-        from simple_agent.managers.project import ProjectManager as ProjectManagerImpl
-        from simple_agent.managers.session import SessionManager as SessionManagerImpl
-        from simple_agent.managers.skill import SkillLoader as SkillLoaderImpl
-        from simple_agent.managers.task import TaskManager as TaskManagerImpl
-        from simple_agent.managers.teammate import TeammateManager as TeammateManagerImpl
-
-        # Create managers if not provided
-        from simple_agent.managers.todo import TodoManager as TodoManagerImpl
-
-        todo = todo_manager or TodoManagerImpl()
-        task = task_manager or TaskManagerImpl(settings)
-        bg = background_manager or BackgroundManagerImpl(settings)
-        bus = message_bus or MessageBusImpl(settings)
-        skill = skill_loader or SkillLoaderImpl(settings=settings)
-        teammate = teammate_manager or TeammateManagerImpl(bus, task, settings)
-        project = ProjectManagerImpl(settings)
-        session = SessionManagerImpl(settings)
-        provider = _create_provider(settings)
-
-        return AgentContext.from_components(
-            settings=settings,
-            provider=provider,
-            todo=todo,
-            task_mgr=task,
-            bg=bg,
-            bus=bus,
-            skill_loader=skill,
-            teammate=teammate,
-            project_mgr=project,
-            session_mgr=session,
-            memory_mgr=None,
-        )
-
-    def _initialize_legacy_handlers(self, permission_manager) -> None:
-        """Initialize legacy global tool handlers for backward compatibility.
-
-        DEPRECATED: This method exists for backward compatibility only.
-        New code should use ToolHandlerRegistry via dependency injection.
-        """
-        from simple_agent.tools.tool_handlers import set_registry
-
-        set_registry(
-            self._tool_registry,
-            settings=self._ctx.settings,
-            permission_manager=permission_manager,
-        )
 
     @property
     def settings(self) -> Settings:
@@ -394,24 +257,3 @@ class Agent:
                     return "\n".join(text_parts)
                 return str(content)
         return "(no response)"
-
-    # Backward compatibility property aliases
-    @property
-    def todo_manager(self):
-        """Alias for todo property (backward compatibility)."""
-        return self._ctx.todo
-
-    @property
-    def task_manager(self):
-        """Alias for task_mgr property (backward compatibility)."""
-        return self._ctx.task_mgr
-
-    @property
-    def background_manager(self):
-        """Alias for bg property (backward compatibility)."""
-        return self._ctx.bg
-
-    @property
-    def message_bus(self):
-        """Alias for bus property (backward compatibility)."""
-        return self._ctx.bus

@@ -192,8 +192,7 @@ class ToolRegistry:
     def get_handlers_dict(self) -> Dict[str, ToolHandler]:
         """Get tool handlers as a dictionary.
 
-        This method is provided for backward compatibility with
-        the existing tool_handlers module.
+        This method exposes registered handlers as a plain dictionary.
 
         Returns:
             Dictionary mapping tool names to handler callables
@@ -234,13 +233,8 @@ class ToolRegistry:
         """
         return iter(self._tools.values())
 
-
-# Backward compatibility: keep old Tool class as a base
 class ToolBase:
-    """Base class for tools (backward compatibility).
-
-    New code should use the Tool Protocol instead.
-    """
+    """Base class for tools."""
 
     name: str = ""
     description: str = ""

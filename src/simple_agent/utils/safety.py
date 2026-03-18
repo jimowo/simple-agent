@@ -372,11 +372,6 @@ def safe_path(p: str, workdir: Path = None) -> Path:
     except (ValueError, RuntimeError) as e:
         raise PathTraversalError(str(p), f"Invalid path: {e}") from e
 
-
-# Legacy constants for backward compatibility
-DANGEROUS_COMMANDS = ["rm -rf /", "sudo", "shutdown", "reboot", "> /dev/"]
-
-
 def is_dangerous_command(command: str) -> bool:
     """
     Check if a command contains dangerous patterns.

@@ -230,13 +230,15 @@ todo = TodoItem(content="Task", status="pending", activeForm="Working")
 
 ### Tool System
 
-Tools are registered and dispatched through a centralized handler:
+Tools are executed through `ToolHandlerRegistry`:
 
 ```python
-from simple_agent.tools import TOOL_HANDLERS
+from simple_agent.agent.context import AgentContext
+from simple_agent.tools import ToolHandlerRegistry
 
-# Execute a tool
-result = TOOL_HANDLERS["bash"](command="echo hello")
+context = AgentContext.from_container(settings)
+registry = ToolHandlerRegistry(context)
+result = registry.handle_bash("echo hello")
 ```
 
 ### Agent Core
@@ -247,6 +249,20 @@ from simple_agent.agent import Agent
 agent = Agent()
 response = agent.process_query("What files are in this directory?")
 ```
+
+For new code, prefer the modern initialization path:
+
+```python
+from simple_agent.agent import Agent
+from simple_agent.agent.context import AgentContext
+
+agent = Agent()
+
+# Or inject a pre-built context when you need shared managers.
+context = AgentContext.from_container(settings)
+agent = Agent(context=context)
+```
+
 
 ## Migration from main.py
 
@@ -262,7 +278,7 @@ The original `main.py` has been refactored into modular components:
 | `MessageBus` | `managers/message.py` |
 | `TeammateManager` | `managers/teammate.py` |
 | `SkillLoader` | `managers/skill.py` |
-| `agent_loop()` | `agent/loop.py` |
+| `AgentLoop` | `agent/loop.py` |
 | REPL | `cli.py` (Typer) |
 
 ## License

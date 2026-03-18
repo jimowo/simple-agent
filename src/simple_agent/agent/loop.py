@@ -41,7 +41,7 @@ class AgentLoop:
         Args:
             context: Agent context with all dependencies
             tool_registry: Optional tool handler registry (created from context if None)
-            permission_manager: Optional permission manager (for backward compatibility)
+            permission_manager: Optional permission manager
         """
         self._ctx = context
         self._rounds_without_todo = 0
@@ -122,7 +122,7 @@ class AgentLoop:
                 except Exception as e:
                     print(f"[Session compression failed: {e}, using legacy method]")
 
-            # Fallback to legacy compression
+            # Fallback to transcript-based compression
             messages[:] = auto_compact(
                 messages,
                 self._ctx.provider,
@@ -334,41 +334,3 @@ class AgentLoop:
                 self._ctx.settings.model_id or "default",
                 self._ctx.settings.transcript_dir,
             )
-
-
-# Backward compatibility function
-def agent_loop(messages: list, agent) -> None:
-    """Run agent loop for conversation history.
-
-    This is a backward compatibility wrapper that uses AgentLoop.
-
-    Args:
-        messages: Message history list (modified in-place)
-        agent: Agent instance (must have _ctx attribute)
-    """
-    # Get context from agent (new Agent class has _ctx)
-    if hasattr(agent, "_ctx"):
-        context = agent._ctx
-        # Try to use the agent's existing tool registry and permission manager
-        tool_registry = getattr(agent, "_tool_registry", None)
-        permission_manager = getattr(agent, "_permission_manager", None)
-        logger.debug(f"[AGENT_LOOP] Using agent's tool_registry: {tool_registry is not None}")
-        logger.debug(f"[AGENT_LOOP] Using agent's permission_manager: {permission_manager is not None}")
-    else:
-        # Legacy fallback - try to build context from agent attributes
-        from simple_agent.agent.context import AgentContext
-        context = AgentContext(
-            settings=agent.settings,
-            todo=agent.todo,
-            task_mgr=agent.task_mgr,
-            bg=agent.bg,
-            bus=agent.bus,
-            skill_loader=agent.skill_loader,
-            teammate=agent.teammate,
-            provider=agent.provider,
-        )
-        tool_registry = None
-        permission_manager = None
-
-    loop = AgentLoop(context, tool_registry, permission_manager)
-    loop.run(messages)

@@ -233,10 +233,12 @@ todo = TodoItem(content="任务", status="pending", activeForm="工作中")
 工具通过集中处理器注册和分发：
 
 ```python
-from simple_agent.tools import TOOL_HANDLERS
+from simple_agent.agent.context import AgentContext
+from simple_agent.tools import ToolHandlerRegistry
 
-# 执行工具
-result = TOOL_HANDLERS["bash"](command="echo hello")
+context = AgentContext.from_container(settings)
+registry = ToolHandlerRegistry(context)
+result = registry.handle_bash("echo hello")
 ```
 
 ### Agent 核心
@@ -262,7 +264,7 @@ response = agent.process_query("这个目录里有什么文件？")
 | `MessageBus` | `managers/message.py` |
 | `TeammateManager` | `managers/teammate.py` |
 | `SkillLoader` | `managers/skill.py` |
-| `agent_loop()` | `agent/loop.py` |
+| `AgentLoop` | `agent/loop.py` |
 | REPL | `cli.py` (Typer) |
 
 ## 许可证

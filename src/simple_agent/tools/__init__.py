@@ -1,6 +1,7 @@
 """Tool system for agent operations."""
 
 from .base import Tool, ToolRegistry
-from .tool_handlers import TOOL_HANDLERS, TOOLS
+from .handler_registry import ToolHandlerRegistry
+from .tool_definitions import TOOLS
 
-__all__ = ["Tool", "ToolRegistry", "TOOL_HANDLERS", "TOOLS"]
+__all__ = ["Tool", "ToolRegistry", "ToolHandlerRegistry", "TOOLS"]

@@ -112,12 +112,15 @@ class TestCLIIntegration:
     def test_run_command_basic(self, runner, mock_provider, temp_workspace):
         """Test the run command with a simple prompt."""
         with patch('simple_agent.cli.main._get_agent') as mock_get_agent, patch(
-            'simple_agent.cli.main.agent_loop'
-        ) as mock_agent_loop:
+            'simple_agent.agent.loop.AgentLoop.run'
+        ) as mock_run:
             mock_agent = Mock()
+            mock_agent._ctx = Mock()
+            mock_agent._tool_registry = Mock()
+            mock_agent.permission_manager = Mock()
             mock_get_agent.return_value = mock_agent
 
-            def populate_history(history, agent):
+            def populate_history(history):
                 history.append(
                     {
                         "role": "assistant",
@@ -125,7 +128,7 @@ class TestCLIIntegration:
                     }
                 )
 
-            mock_agent_loop.side_effect = populate_history
+            mock_run.side_effect = populate_history
             result = runner.invoke(app, ["run", "Hello"])
             assert result.exit_code == 0
             assert "Test response" in result.stdout

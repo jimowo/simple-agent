@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 
 from simple_agent.agent.base import Agent
-from simple_agent.agent.loop import agent_loop
+from simple_agent.agent.loop import AgentLoop
 from simple_agent.cli import InteractivePrompt
 from simple_agent.models.config import Settings, create_settings, initialize_config
 from simple_agent.permissions.manager import PermissionManager
@@ -532,7 +532,7 @@ def chat_command(
         # Register status with controller so permission prompts can pause it
         status_controller.set_status(status)
         try:
-            agent_loop(history, agent)
+            AgentLoop(agent._ctx, agent._tool_registry, agent.permission_manager).run(history)
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
             status.stop()
@@ -600,7 +600,7 @@ def run_command(
     # Register status with controller so permission prompts can pause it
     status_controller.set_status(status)
     try:
-        agent_loop(history, agent)
+        AgentLoop(agent._ctx, agent._tool_registry, agent.permission_manager).run(history)
     except Exception as e:
         status.stop()
         console.print(f"[red]Error: {e}[/red]")

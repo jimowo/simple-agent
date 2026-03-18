@@ -108,7 +108,7 @@ class SubAgentRunner:
         if self._tool_registry is not None:
             return self._tool_registry.get_handlers(tool_names)
 
-        # Fallback to minimal handlers (for backward compatibility)
+        # Fallback to minimal handlers when no registry was supplied.
         from simple_agent.tools.bash_tools import run_bash
         from simple_agent.tools.file_tools import edit_file, read_file, write_file
 
@@ -168,23 +168,3 @@ class SubAgentRunner:
             if isinstance(c, dict) and c.get("type") == "text":
                 text_parts.append(c.get("text", ""))
         return "".join(text_parts) or "(no summary)"
-
-
-# Backward compatibility function
-def run_subagent(
-    provider: BaseProvider, prompt: str, agent_type: str = "Explore"
-) -> str:
-    """Run a subagent for isolated exploration or work.
-
-    This is a backward compatibility wrapper that uses SubAgentRunner.
-
-    Args:
-        provider: AI provider instance
-        prompt: Prompt for subagent
-        agent_type: Type of agent (Explore or general-purpose)
-
-    Returns:
-        Summary of subagent work
-    """
-    runner = SubAgentRunner(provider)
-    return runner.run(prompt, agent_type)
