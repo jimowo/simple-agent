@@ -38,7 +38,7 @@ class InMemoryMemory(BaseMemory):
         """
         super().__init__(settings, encoder)
 
-        self.memory_dir = self.settings.workdir / ".simple" / "memory"
+        self.memory_dir = self.settings.memory_dir
         self.memory_dir.mkdir(parents=True, exist_ok=True)
 
         self._entries: Dict[str, MemoryEntry] = {}

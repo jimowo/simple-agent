@@ -118,11 +118,15 @@ class TestAgentContext:
 
         settings = Settings(
             workdir=temp_workspace,
+            simple_home=temp_workspace / ".simple-home",
             tasks_dir=temp_workspace / "tasks",
             inbox_dir=temp_workspace / "inbox",
             skills_dir=temp_workspace / "skills",
             team_dir=temp_workspace / "team",
             transcript_dir=temp_workspace / "transcripts",
+            logs_dir=temp_workspace / "logs",
+            projects_root=temp_workspace / ".simple-home" / "projects",
+            memory_dir=temp_workspace / ".simple-home" / "memory",
         )
 
         # Mock the provider creation
@@ -150,7 +154,12 @@ class TestAgentContext:
         from simple_agent.managers.session import SessionManager
 
         reset_container()
-        settings = Settings(workdir=temp_workspace)
+        settings = Settings(
+            workdir=temp_workspace,
+            simple_home=temp_workspace / ".simple-home",
+            projects_root=temp_workspace / ".simple-home" / "projects",
+            memory_dir=temp_workspace / ".simple-home" / "memory",
+        )
         project_mgr = ProjectManager(settings)
         session_mgr = SessionManager(settings)
 

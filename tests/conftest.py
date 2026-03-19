@@ -54,14 +54,18 @@ def use_temp_workspace(temp_workspace):
     This fixture is autouse so all tests automatically use temp workspace.
     """
     def get_temp_settings():
+        simple_home = temp_workspace / ".simple-home"
         return Settings(
             workdir=temp_workspace,
+            simple_home=simple_home,
             tasks_dir=temp_workspace / "tasks",
             inbox_dir=temp_workspace / "inbox",
             skills_dir=temp_workspace / "skills",
             team_dir=temp_workspace / "team",
             transcript_dir=temp_workspace / "transcripts",
             logs_dir=temp_workspace / "logs",
+            projects_root=simple_home / "projects",
+            memory_dir=simple_home / "memory",
         )
 
     # Patch Settings() to return temp workspace settings
@@ -103,11 +107,15 @@ def mock_settings(temp_workspace):
     """
     settings = Settings(
         workdir=temp_workspace,
+        simple_home=temp_workspace / ".simple-home",
         tasks_dir=temp_workspace / "tasks",
         inbox_dir=temp_workspace / "inbox",
         skills_dir=temp_workspace / "skills",
         team_dir=temp_workspace / "team",
         transcript_dir=temp_workspace / "transcripts",
+        logs_dir=temp_workspace / "logs",
+        projects_root=temp_workspace / ".simple-home" / "projects",
+        memory_dir=temp_workspace / ".simple-home" / "memory",
     )
     return settings
 

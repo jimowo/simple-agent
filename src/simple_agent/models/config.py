@@ -24,6 +24,14 @@ from simple_agent.exceptions import InvalidProviderError
 _config_initialized = False
 
 
+def _path_to_project_id(path: Path) -> str:
+    """Convert a filesystem path into a stable project identifier."""
+    path_str = str(path).lower().replace("\\", "--").replace("/", "--").replace(":", "")
+    if path_str.startswith("--"):
+        path_str = path_str[2:]
+    return "--".join(segment for segment in path_str.split("--") if segment)
+
+
 def initialize_config(load_dotenv_override: bool = True) -> None:
     """Initialize configuration by loading environment variables.
 
@@ -89,6 +97,7 @@ class Settings(BaseSettings):
 
     # Directory paths
     workdir: Path = Field(default_factory=lambda: Path.cwd())
+    simple_home: Optional[Path] = Field(default=None, alias="SIMPLE_HOME")
     team_dir: Optional[Path] = None
     inbox_dir: Optional[Path] = None
     tasks_dir: Optional[Path] = None
@@ -159,17 +168,24 @@ class Settings(BaseSettings):
 
     def model_post_init(self, __context) -> None:
         """Derive directory paths from workdir unless explicitly overridden."""
-        self.workdir = Path(self.workdir)
+        self.workdir = Path(self.workdir).resolve()
+        if self.simple_home is None:
+            self.simple_home = Path.home() / ".simple"
+        else:
+            self.simple_home = Path(self.simple_home).expanduser().resolve()
+
+        project_id = _path_to_project_id(self.workdir)
+        workspace_state_dir = self.simple_home / "workspaces" / project_id
 
         derived_paths = {
-            "team_dir": self.workdir / ".team",
-            "inbox_dir": self.workdir / ".team" / "inbox",
-            "tasks_dir": self.workdir / ".tasks",
+            "team_dir": workspace_state_dir / "team",
+            "inbox_dir": workspace_state_dir / "team" / "inbox",
+            "tasks_dir": workspace_state_dir / "tasks",
             "skills_dir": self.workdir / "skills",
-            "transcript_dir": self.workdir / ".transcripts",
-            "logs_dir": self.workdir / ".logs",
-            "projects_root": self.workdir / ".simple" / "projects",
-            "memory_dir": self.workdir / ".simple" / "memory",
+            "transcript_dir": workspace_state_dir / "transcripts",
+            "logs_dir": self.simple_home / "logs",
+            "projects_root": self.simple_home / "projects",
+            "memory_dir": self.simple_home / "memory",
         }
 
         for field_name, default_path in derived_paths.items():
@@ -177,7 +193,7 @@ class Settings(BaseSettings):
             if value is None:
                 setattr(self, field_name, default_path)
             else:
-                setattr(self, field_name, Path(value))
+                setattr(self, field_name, Path(value).expanduser())
 
     def get_active_provider(self) -> str:
         """Get the active provider name (runtime override or default).

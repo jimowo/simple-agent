@@ -90,14 +90,14 @@ class InteractivePrompt:
         """Initialize the interactive prompt.
 
         Args:
-            history_file: Path to history file. Defaults to ~/.simple-agent_history
+            history_file: Path to history file. Defaults to ~/.simple/history
             history_size: Maximum number of history entries to keep
             enable_completion: Whether to enable tab completion
         """
         # Set default history file path
         if history_file is None:
             home = Path.home()
-            history_file = home / ".simple-agent_history"
+            history_file = home / ".simple" / "history"
 
         self.history_file = history_file
         self.history_size = history_size

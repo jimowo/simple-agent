@@ -37,7 +37,7 @@ class InMemoryBackend(BaseManager):
         """
         super().__init__(settings)
         self.memory_dir = self._ensure_dir(
-            self.settings.workdir / ".simple" / "memory"
+            self.settings.memory_dir
         )
         self._entries: Dict[str, MemoryEntry] = {}
         self.encoder = encoder

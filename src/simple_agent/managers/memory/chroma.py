@@ -47,7 +47,7 @@ class ChromaMemory(BaseMemory):
 
         # Create ChromaDB client
 
-        chroma_path = self.settings.workdir / ".simple" / "chroma"
+        chroma_path = self.settings.memory_dir / "chroma"
         chroma_path.mkdir(parents=True, exist_ok=True)
 
         self.client = chromadb.PersistentClient(path=str(chroma_path))

@@ -46,8 +46,39 @@ cd simple-agent
 # Install dependencies with uv
 uv sync
 
-# Or install globally
-uv pip install -e .
+# Install as a global CLI like opencode / claude code
+uv tool install .
+
+# Development install with live code reload
+uv tool install --editable .
+```
+
+### Setup with pipx
+
+```bash
+pipx install .
+```
+
+After installation, the `simple-agent` command is available globally.
+
+### Runtime paths
+
+`simple-agent` always uses the directory where you launch it as the active workspace.
+
+- Working directory: current shell directory, unless overridden with `--workdir`
+- Persistent state root: `~/.simple`
+- Logs: `~/.simple/logs`
+- Sessions/projects metadata: `~/.simple/projects`
+- Per-workspace state such as tasks, inbox, transcripts: `~/.simple/workspaces/<project-id>/...`
+
+Examples:
+
+```bash
+cd ~/code/project-a
+simple-agent chat
+
+cd ~/code/project-b
+simple-agent run "summarize this repo"
 ```
 
 ## Configuration
