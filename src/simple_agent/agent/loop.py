@@ -180,15 +180,11 @@ class AgentLoop:
         if not memory_mgr:
             return
 
-        # Get the last user message for context
-        last_user_msg = None
-        for msg in reversed(messages):
-            if msg.get("role") == "user":
-                last_user_msg = msg
-                break
-
-        if not last_user_msg:
+        # Get the last real user message for context, skipping synthetic notifications.
+        user_msg_index = self._find_last_real_user_message_index(messages)
+        if user_msg_index is None:
             return
+        last_user_msg = messages[user_msg_index]
 
         # Extract query text from the message
         query_text = last_user_msg.get("content", "")
@@ -230,15 +226,13 @@ class AgentLoop:
                     memory_context += f"- {entry.content}\n"
                 memory_context += "</relevant_memory>\n"
 
-                # Inject as a system message before the last user message
-                # This ensures the LLM has context without modifying user input
+                # Inject as a system message immediately before the triggering user message.
                 memory_msg = {
                     "role": "system",
                     "content": memory_context
                 }
 
-                # Insert before the last message
-                messages.insert(-1, memory_msg)
+                messages.insert(user_msg_index, memory_msg)
                 logger.debug(
                     f"[AgentLoop] Injected {len(result.entries)} memories "
                     f"(query: {query_text[:50]}...)"
@@ -246,6 +240,25 @@ class AgentLoop:
 
         except Exception as e:
             logger.warning(f"[AgentLoop] Failed to retrieve memories: {e}")
+
+    def _find_last_real_user_message_index(
+        self, messages: List[Dict[str, Any]]
+    ) -> Optional[int]:
+        """Return the index of the last user-authored message."""
+        synthetic_prefixes = ("<background-results>", "<inbox>")
+
+        for idx in range(len(messages) - 1, -1, -1):
+            msg = messages[idx]
+            if msg.get("role") != "user":
+                continue
+
+            content = msg.get("content", "")
+            if isinstance(content, str) and content.startswith(synthetic_prefixes):
+                continue
+
+            return idx
+
+        return None
 
     def _call_llm(self, messages: List[Dict[str, Any]]) -> Any:
         """Call the LLM provider.

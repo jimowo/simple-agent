@@ -272,6 +272,7 @@ def chat_command(
         if not session:
             console.print(f"[red]Session '{resume}' not found.[/red]")
             raise typer.Exit(1)
+        sm.set_current_session(session)
         # Load session history
         saved_messages = sm.read_messages(project.project_id, session.session_id)
         history = []
@@ -807,9 +808,8 @@ def _handle_session_command(query: str, project, sm, console) -> str:
         # Show command history from current session
         # Get current session's history file
         if sm.get_current_session():
-            workdir = Path(project.original_path)
             history_file = get_session_history_file(
-                workdir / ".simple" / "projects",
+                sm.projects_root,
                 project.project_id,
                 sm.get_current_session().session_id,
             )

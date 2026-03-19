@@ -27,9 +27,7 @@ class TestPermissionRule:
         rule = PermissionRule("bash", risk_level="high")
 
         assert rule.matches("bash", "high") is True
-        # Note: PermissionRule.matches only checks tool pattern, not risk_level
-        # The risk_level is stored in the rule but not used in matching
-        assert rule.matches("bash", "medium") is True  # Same tool, different risk
+        assert rule.matches("bash", "medium") is False
         assert rule.matches("ls", "high") is False  # Wrong tool
 
     def test_wildcard_match(self):
@@ -48,6 +46,7 @@ class TestPermissionRule:
         assert rule.matches("any_tool", "high") is True
         assert rule.matches("bash", "high") is True
         assert rule.matches("write_file", "high") is True
+        assert rule.matches("write_file", "low") is False
 
 
 @pytest.mark.security
@@ -168,14 +167,15 @@ class TestPermissionManager:
 
     def test_risk_level_override(self):
         """Test risk level override in check_permission."""
-        manager = PermissionManager(user_callback=lambda r: PermissionResponse(allowed=False))
+        callback = Mock(return_value=PermissionResponse(allowed=False))
+        manager = PermissionManager(user_callback=callback)
 
         # bash has default medium risk, but override to low
         response = manager.check_permission("bash", {"command": "ls"}, risk_level_override="low")
 
-        # Low risk tools shouldn't require permission by default
-        # But bash has a rule for medium/high, so let's verify the override works
         assert isinstance(response, PermissionResponse)
+        assert response.allowed is True
+        callback.assert_not_called()
 
     def test_requires_permission(self):
         """Test the _requires_permission internal method."""

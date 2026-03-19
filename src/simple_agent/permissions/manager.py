@@ -228,14 +228,16 @@ class PermissionRule:
         self.risk_level = risk_level
         self.reason = reason
 
-    def matches(self, tool: str, _risk_level: str) -> bool:
+    def matches(self, tool: str, risk_level: str) -> bool:
+        tool_matches = False
         if self.tool_pattern == "*":
-            return True
-        if self.tool_pattern == tool:
-            return True
-        if self.tool_pattern.endswith("*"):
-            return tool.startswith(self.tool_pattern[:-1])
-        return False
+            tool_matches = True
+        elif self.tool_pattern == tool:
+            tool_matches = True
+        elif self.tool_pattern.endswith("*"):
+            tool_matches = tool.startswith(self.tool_pattern[:-1])
+
+        return tool_matches and self.risk_level == risk_level
 
 
 class PermissionManager:

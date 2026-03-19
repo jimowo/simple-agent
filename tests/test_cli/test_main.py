@@ -1,10 +1,11 @@
 """CLI integration tests for simple-agent."""
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
 from typer.testing import CliRunner
 
-from simple_agent.cli.main import app
+from simple_agent.cli.main import _handle_session_command, app
 from simple_agent.models.config import initialize_config
 
 
@@ -155,6 +156,66 @@ class TestCLIIntegration:
         result = runner.invoke(app, ["chat", "--help"])
         assert result.exit_code == 0
         assert "Start interactive chat mode" in result.stdout
+
+    def test_chat_resume_sets_current_session(self, runner, mock_settings):
+        """Resuming a chat session should mark it as the current session."""
+        session = SimpleNamespace(session_id="session-1234", project_id="project-1234")
+        project = SimpleNamespace(project_id="project-1234")
+        prompt = Mock()
+        prompt.prompt.side_effect = EOFError()
+
+        pm_instance = Mock()
+        pm_instance.get_or_create_project.return_value = project
+        sm_instance = Mock()
+        sm_instance.get_session.return_value = session
+        sm_instance.read_messages.return_value = []
+
+        with patch("simple_agent.cli.main.create_settings", return_value=mock_settings), patch(
+            "simple_agent.managers.project.ProjectManager",
+            return_value=pm_instance,
+        ), patch(
+            "simple_agent.managers.session.SessionManager",
+            return_value=sm_instance,
+        ), patch(
+            "simple_agent.cli.main.InteractivePrompt",
+            return_value=prompt,
+        ), patch(
+            "simple_agent.agent.context.AgentContext.from_container",
+            return_value=Mock(),
+        ), patch(
+            "simple_agent.cli.main.Agent",
+            return_value=Mock(),
+        ):
+            result = runner.invoke(app, ["--workdir", str(mock_settings.workdir), "chat", "--resume", "session-1234"])
+
+        assert result.exit_code == 0
+        sm_instance.set_current_session.assert_called_once_with(session)
+
+
+class TestSessionCommandHelpers:
+    """Test built-in chat session commands."""
+
+    def test_history_command_uses_session_manager_projects_root(self, temp_workspace):
+        """History lookup should use the active session manager root."""
+        console = Mock()
+        current_session = SimpleNamespace(session_id="session-1234")
+        sm = Mock()
+        sm.get_current_session.return_value = current_session
+        sm.projects_root = temp_workspace / "custom-project-root"
+        project = SimpleNamespace(project_id="project-1234", original_path=str(temp_workspace))
+
+        with patch("simple_agent.cli.main.get_session_history_file") as mock_get_history:
+            history_file = temp_workspace / "history-file"
+            history_file.write_text("cmd\n", encoding="utf-8")
+            mock_get_history.return_value = history_file
+
+            _handle_session_command("/history", project, sm, console)
+
+        mock_get_history.assert_called_once_with(
+            sm.projects_root,
+            project.project_id,
+            current_session.session_id,
+        )
 
 
 class TestCLIErrorHandling:

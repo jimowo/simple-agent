@@ -1,6 +1,8 @@
 """Test configurable search API functionality."""
 
 
+from unittest.mock import patch
+
 import pytest
 
 from simple_agent.models.config import Settings, create_settings
@@ -137,24 +139,38 @@ class TestWebSearchConfiguration:
 
     def test_web_search_duckduckgo_default(self):
         """Test web_search with default DuckDuckGo API."""
-        # This test may make an actual network request
-        # Consider mocking requests.get in production tests
-        result = web_search("test query", num_results=1, timeout=5)
+        with patch(
+            "simple_agent.tools.web_tools._require_requests",
+            return_value=object(),
+        ), patch(
+            "simple_agent.tools.web_tools._search_duckduckgo",
+            return_value="Search results for: test query",
+        ) as mock_search:
+            result = web_search("test query", num_results=1, timeout=5)
+
         assert isinstance(result, str)
-        # May contain results or error due to network/API limitations
+        mock_search.assert_called_once_with("test query", 1, 5)
 
     def test_web_search_with_settings(self):
         """Test web_search with explicit settings parameter."""
-        # Use environment variable alias name
         settings = create_settings(SEARCH_API="duckduckgo")
-        result = web_search("test query", num_results=1, timeout=5, settings=settings)
+        with patch(
+            "simple_agent.tools.web_tools._require_requests",
+            return_value=object(),
+        ), patch(
+            "simple_agent.tools.web_tools._search_duckduckgo",
+            return_value="Search results for: test query",
+        ) as mock_search:
+            result = web_search("test query", num_results=1, timeout=5, settings=settings)
+
         assert isinstance(result, str)
+        mock_search.assert_called_once_with("test query", 1, 5)
 
     def test_web_search_unsupported_api(self):
         """Test web_search with unsupported API name."""
-        # Use environment variable alias name
         settings = create_settings(SEARCH_API="totally_fake_api")
-        result = web_search("test query", settings=settings)
+        with patch("simple_agent.tools.web_tools._require_requests", return_value=object()):
+            result = web_search("test query", settings=settings)
         # Should return an error about unsupported API
         assert isinstance(result, str)
 
@@ -169,6 +185,7 @@ class TestWebSearchConfiguration:
     def test_web_search_invalid_config_returns_formatted_error(self):
         """Invalid config should be returned through the shared formatter."""
         settings = create_settings(SEARCH_API="totally_fake_api")
-        result = web_search("test query", settings=settings)
+        with patch("simple_agent.tools.web_tools._require_requests", return_value=object()):
+            result = web_search("test query", settings=settings)
         assert result.startswith("Error: ")
         assert "Unsupported search API" in result

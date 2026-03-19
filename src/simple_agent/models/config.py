@@ -89,18 +89,15 @@ class Settings(BaseSettings):
 
     # Directory paths
     workdir: Path = Field(default_factory=lambda: Path.cwd())
-    team_dir: Path = Field(default_factory=lambda: Path.cwd() / ".team")
-    inbox_dir: Path = Field(default_factory=lambda: Path.cwd() / ".team" / "inbox")
-    tasks_dir: Path = Field(default_factory=lambda: Path.cwd() / ".tasks")
-    skills_dir: Path = Field(default_factory=lambda: Path.cwd() / "skills")
-    transcript_dir: Path = Field(default_factory=lambda: Path.cwd() / ".transcripts")
-    logs_dir: Path = Field(default_factory=lambda: Path.cwd() / ".logs")
+    team_dir: Optional[Path] = None
+    inbox_dir: Optional[Path] = None
+    tasks_dir: Optional[Path] = None
+    skills_dir: Optional[Path] = None
+    transcript_dir: Optional[Path] = None
+    logs_dir: Optional[Path] = None
 
     # Project and session configuration
-    projects_root: Path = Field(
-        default_factory=lambda: Path.cwd() / ".simple" / "projects",
-        alias="PROJECTS_ROOT"
-    )
+    projects_root: Optional[Path] = Field(default=None, alias="PROJECTS_ROOT")
     auto_archive_days: int = Field(
         default=30,
         alias="AUTO_ARCHIVE_DAYS"
@@ -139,10 +136,7 @@ class Settings(BaseSettings):
     # Memory system settings
     memory_enabled: bool = Field(default=True, alias="MEMORY_ENABLED")
     memory_backend: str = Field(default="chroma", alias="MEMORY_BACKEND")
-    memory_dir: Path = Field(
-        default_factory=lambda: Path.cwd() / ".simple" / "memory",
-        alias="MEMORY_DIR"
-    )
+    memory_dir: Optional[Path] = Field(default=None, alias="MEMORY_DIR")
     # OpenAI Embeddings configuration
     memory_encoder: str = Field(default="openai", alias="MEMORY_ENCODER")
     memory_openai_base_url: Optional[str] = Field(default=None, alias="MEMORY_OPENAI_BASE_URL")
@@ -161,7 +155,29 @@ class Settings(BaseSettings):
     serpapi_api_key: Optional[str] = Field(default=None, alias="SERPAPI_API_KEY")
     web_timeout: int = Field(default=20, alias="WEB_TIMEOUT")
 
-    model_config = ConfigDict(extra="allow", env_file=".env")
+    model_config = ConfigDict(extra="allow", env_file=".env", populate_by_name=True)
+
+    def model_post_init(self, __context) -> None:
+        """Derive directory paths from workdir unless explicitly overridden."""
+        self.workdir = Path(self.workdir)
+
+        derived_paths = {
+            "team_dir": self.workdir / ".team",
+            "inbox_dir": self.workdir / ".team" / "inbox",
+            "tasks_dir": self.workdir / ".tasks",
+            "skills_dir": self.workdir / "skills",
+            "transcript_dir": self.workdir / ".transcripts",
+            "logs_dir": self.workdir / ".logs",
+            "projects_root": self.workdir / ".simple" / "projects",
+            "memory_dir": self.workdir / ".simple" / "memory",
+        }
+
+        for field_name, default_path in derived_paths.items():
+            value = getattr(self, field_name)
+            if value is None:
+                setattr(self, field_name, default_path)
+            else:
+                setattr(self, field_name, Path(value))
 
     def get_active_provider(self) -> str:
         """Get the active provider name (runtime override or default).
